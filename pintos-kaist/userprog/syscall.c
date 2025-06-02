@@ -34,7 +34,7 @@ void check_address(const uint64_t *addr);
 
 #define PAL_ZERO 0
 
-
+// TODO: 주소 체크 방식 추가. 지금은 모르겠음
 /**
  * 주소값이 유저 영역(<0x8004000000)내인지를 검증
  * 

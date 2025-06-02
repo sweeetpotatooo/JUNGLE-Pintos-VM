@@ -15,4 +15,10 @@ int process_wait (tid_t);
 void process_exit (void);
 void process_activate (struct thread *next);
 
+struct lazy_aux {
+    struct file *file;
+    int read_bytes;
+    int zero_bytes;
+};
+
 #endif /* userprog/process.h */

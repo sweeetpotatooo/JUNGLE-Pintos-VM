@@ -7,6 +7,7 @@
 #include "threads/vaddr.h"
 // project 3
 #include "threads/mmu.h"
+#include "vm/uninit.h"
 
 /* 가상 메모리 서브시스템을 초기화합니다.
  * 각 서브시스템의 초기화 코드를 호출합니다. */
@@ -43,11 +44,18 @@ static struct frame *vm_get_victim(void);
 static bool vm_do_claim_page(struct page *page);
 static struct frame *vm_evict_frame(void);
 
+// 주어진 타입으로 초기화되지 않은 페이지를 생성합니다.
+// 초기화되지 않은 페이지의 swap_in 핸들러는 페이지를 자동으로 주어진 타입에 맞게 초기화하고, 주어진 AUX와 함께 INIT을 호출합니다.
+// 페이지 구조체를 얻은 후, 해당 페이지를 프로세스의 supplemental page table에 삽입합니다.
+// vm.h에서 정의된 VM_TYPE 매크로를 사용하는 것이 유용할 수 있습니다.
+/* Implement vm_alloc_page_with_initializer().
+ * You should fetch an appropriate initializer according
+ * to the passed vm_type and call uninit_new with it. */
 /* 초기화 함수와 함께 대기 중인 페이지 객체를 생성합니다.
- * 페이지를 생성하고 싶다면 직접 만들지 말고 반드시 이 함수나 `vm_alloc_page`를 사용해야 합니다. */
+ * 페이지를 생성하고 싶다면 직접 만들지 말고 반드시 `vm_alloc_page_with_initializer`나 `vm_alloc_page`를 사용해야 합니다. */
 bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writable,
 									vm_initializer *init, void *aux)
-									
+
 {
 
 	ASSERT(VM_TYPE(type) != VM_UNINIT)
@@ -55,13 +63,30 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writabl
 	struct supplemental_page_table *spt = &thread_current()->spt;
 
 	/* 해당 upage가 이미 존재하는지 확인합니다. */
-	if (spt_find_page(spt, upage) == NULL)
+	if (spt_find_page(spt, upage) == NULL) // 페이지가 존재하지 않는다면
 	{
-		/* TODO: 페이지를 생성하고, VM 타입에 맞는 초기화 함수를 가져와서,
-		 * TODO: uninit_new를 호출하여 "uninit" 페이지 구조체를 생성하세요.
-		 * TODO: 생성 이후 필요한 필드를 수정하세요. */
+		// HACK: 플래그는? 말록이야? 아니야? 몰라?
+		struct page *page = palloc_get_page(PAL_USER); // 물리가 바로 나오는 거잖아. 그럼 lazy loading이 아니잖아.
+		/* TODO: 페이지를 생성하고(이러고 나면 page->va 참조 가능), -> va가 여전히 알쏭달쏭.
+		 * VM 타입에 맞는 초기화 함수를 가져와서, -> 이건 처리된 거 같음.
+		 * TODO: uninit_new를 호출하여 "uninit" 페이지 구조체를 생성하세요. -> 이건?
+		 * TODO: 생성 이후 필요한 필드를 수정하세요. -> 뭐가 필요한데요??
+		 */
+		page->va = upage;
+		page->writable = writable;
+		switch (VM_TYPE(type))
+		{
+		case (VM_ANON):
+			// HACK: va가 문제. 어떤 값을 va로 넘겨줘야 할지 불분명. VM_uninit에 대해 처리?.
+			uninit_new(page, page->va, init, type, aux, anon_initializer);
+			break;
+		case (VM_FILE):
+			uninit_new(page, page->va, init, type, aux, file_backed_initializer);
+			break;
+		};
 
-		/* TODO: 생성한 페이지를 spt에 삽입하세요. */
+		/* 생성한 페이지를 spt에 삽입하세요. */
+		return spt_insert_page(&thread_current()->spt, page); // install page 역할을 해주는 거 아닌가?
 	}
 
 err:
@@ -73,7 +98,7 @@ struct page *
 spt_find_page(struct supplemental_page_table *spt UNUSED, void *va UNUSED)
 {
 	struct page *page = NULL;
-	// - 가상 주소 `va`에 해당하는 페이지를 보조 페이지 테이블에서 찾습니다.
+	// - 가상 주소 `va`에 해당하는 페이지를 supplemental page table에서 찾습니다.
 	// - 찾지 못하면 `NULL`을 반환합니다.
 	struct page page;
 	struct hash_elem *e;
@@ -104,7 +129,7 @@ bool spt_insert_page(struct supplemental_page_table *spt,
 
 	if (hash_insert(&spt->hash, &page->hash_elem) == NULL) // null이면 삽입 성공
 	{
-		succ = true; 
+		succ = true;
 	}
 	else // 실패
 	{
@@ -142,11 +167,11 @@ vm_evict_frame(void)
 	return NULL;
 }
 
-/* Gets a new physical page from the user pool by calling palloc_get_page. 
-* When successfully got a page from the user pool, also allocates a frame, initialize its members, and returns it. 
-* After you implement vm_get_frame, you have to allocate all user space pages (PALLOC_USER) through this function. 
-* You don't need to handle swap out for now in case of page allocation failure. 
-* Just mark those case with PANIC ("todo") for now. */
+/* Gets a new physical page from the user pool by calling palloc_get_page.
+ * When successfully got a page from the user pool, also allocates a frame, initialize its members, and returns it.
+ * After you implement vm_get_frame, you have to allocate all user space pages (PALLOC_USER) through this function.
+ * You don't need to handle swap out for now in case of page allocation failure.
+ * Just mark those case with PANIC ("todo") for now. */
 
 /* palloc()으로 프레임을 할당받습니다.
  * 사용 가능한 페이지가 없다면 페이지를 교체하여 빈 공간을 만듭니다.
@@ -156,7 +181,7 @@ static struct frame *
 vm_get_frame(void)
 {
 	struct frame *frame = malloc(sizeof(struct frame));
-	if(frame == NULL)
+	if (frame == NULL)
 	{
 		PANIC("TODO");
 	}
@@ -188,10 +213,10 @@ vm_handle_wp(struct page *page UNUSED)
 }
 
 /* 성공 시 true를 반환합니다. */
-bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
-						 bool user UNUSED, bool write UNUSED, bool not_present UNUSED)
+bool vm_try_handle_fault(struct intr_frame *f, void *addr,
+						 bool user, bool write, bool not_present)
 {
-	struct supplemental_page_table *spt UNUSED = &thread_current()->spt;
+	struct supplemental_page_table *spt = &thread_current()->spt;
 	struct page *page = NULL;
 	/* TODO: 예외에 대한 유효성 검사 수행 */
 	/* TODO: 여기에 코드를 작성하세요. */
@@ -213,10 +238,10 @@ void vm_dealloc_page(struct page *page)
 bool vm_claim_page(void *va)
 {
 	struct page *page = NULL;
-	page = spt_find_page(&thread_current()->spt, va);
-	if (page == NULL)
+	page = spt_find_page(&thread_current()->spt, va); // va를 가지고 현재 쓰레드의 spt 에서 페이지를 찾아냄.
+	if (page == NULL)								  // spt에 없으면 false 리턴.
 		return false;
-	return vm_do_claim_page(page);
+	return vm_do_claim_page(page); // 있으면 바로 프레임 할당해서 돌려줌.
 }
 
 /* 주어진 PAGE를 할당하고 MMU 설정을 합니다. */
@@ -259,24 +284,50 @@ bool page_less(const struct hash_elem *a, const struct hash_elem *b, void *aux)
 	return page_a->va < page_b->va;
 }
 
-/* 새로운 보조 페이지 테이블을 초기화합니다. */
+/* 새로운 supplemental page table을 초기화합니다. */
 void supplemental_page_table_init(struct supplemental_page_table *spt UNUSED)
 {
 	hash_init(&spt->hash, page_hash, page_less, NULL);
 }
 
-/* src에서 dst로 보조 페이지 테이블을 복사합니다. */
-// - `src`의 보조 페이지 테이블을 `dst`에 복사
+/* src에서 dst로 supplemental page table을 복사합니다. */
+// - `src`의 supplemental page table을 `dst`에 복사
 // - fork 시 부모의 실행 컨텍스트를 자식에게 복사할 때 사용
 // - 각 페이지를 순회하며 `uninit_page`로 생성하고 **즉시 claim 처리**해야 함
-bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
-								  struct supplemental_page_table *src UNUSED)
+// TODO: 구현 하다 말았음.
+bool supplemental_page_table_copy(struct supplemental_page_table *dst,
+								  struct supplemental_page_table *src)
 {
+	ASSERT(src != NULL);
+	ASSERT(dst != NULL);
+
+	struct hash_iterator hi;
+	struct hash *src_hash = &src->hash;
+
+	// hash iterator initialized
+	hash_first(&hi, src_hash);
+	for (; hi.elem != NULL; hash_next(&hi))
+	{
+		struct page *src_page = hash_entry(hi.elem, struct page, hash_elem);
+		struct page *dest_page;
+		vm_alloc_page(page_get_type(src_page), src_page->va, src_page->writable); // 결국 uninit_page를 만들긴 함.
+		vm_claim_page(src_page->va);											  // src_page의 가상 주소를 가지고 현재 쓰레드의 spt에서 페이지를 찾아서 프레임을 할당해준다. spt 복사하는데 이게 왜 있어야 하는 거?
+		spt_insert_page(src, src_page);
+	}
 }
 
-/* 보조 페이지 테이블이 가지고 있는 리소스를 해제합니다. */
-void supplemental_page_table_kill(struct supplemental_page_table *spt UNUSED)
+/* supplemental page table이 가지고 있는 리소스를 해제합니다. */
+void supplemental_page_table_kill(struct supplemental_page_table *spt)
 {
-	/* TODO: 해당 스레드가 가지고 있는 보조 페이지 테이블의 모든 항목을 제거하고,
+	/* TODO: 해당 스레드가 가지고 있는 supplemental page table의 모든 항목을 제거하고,
 	 * TODO: 수정된 내용을 저장소에 기록하세요(write-back). */
+	// NOTE: 민혁이가 clear 쓰라고 함
+	hash_clear(&spt->hash, spt_destructor); // HACK: destructor 뭘로 줘야 하는지 모르겠음
+
+}
+
+void spt_destructor(struct hash_elem *he)
+{
+	struct page *page = hash_entry(he, struct page, hash_elem);
+	vm_dealloc_page(page);
 }

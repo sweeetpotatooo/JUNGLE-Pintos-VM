@@ -8,6 +8,16 @@
  * function.
  * */
 
+/* uninit.c: 초기화되지 않은 페이지(uninitialized page)의 구현
+ *
+ * 모든 페이지는 처음에는 uninit 페이지로 생성됩니다. 첫 페이지 폴트가 발생하면
+ * 핸들러 체인은 uninit_initialize(page->operations.swap_in)을 호출합니다.
+ * uninit_initialize 함수는 페이지 객체를 초기화하여 anon, file, page_cache와
+ * 같은 구체적인 페이지 객체로 변환한 뒤,
+ * vm_alloc_page_with_initializer 함수에서 전달된 초기화 콜백을 호출합니다.
+ */
+
+
 #include "vm/vm.h"
 #include "vm/uninit.h"
 
@@ -42,16 +52,28 @@ uninit_new (struct page *page, void *va, vm_initializer *init,
 	};
 }
 
+/* Initializes the page on the first fault.  첫 폴트 발생 시 페이지를 초기화합니다.
+* The template code first fetches vm_initializer and aux 템플릿 코드는 우선 vm_initializer와 aux를 가져옵니다.
+* and calls the corresponding page_initializer  그리고 대응하는 페이지 이니셜라이저를 호출합니다.
+* through a function pointer.  함수 포인터를 이용해서요.
+* You may need to modify the function depending on your design. 당신은 당신 디자인에 맞게 이 함수(함수 포인터가 가리키는 함수?)를 수정하세요
+ */
+
+// 최초 페이지 폴트 발생 시 호출
+// 내부에서 저장된 초기화 함수(init)와 aux 정보를 사용해 `anon_initializer` 등 호출
 /* Initalize the page on first fault */
 static bool
 uninit_initialize (struct page *page, void *kva) {
+	
 	struct uninit_page *uninit = &page->uninit;
 
+	/* 우선 가져오고, page_initialize가 값을 덮어씌운다. */
 	/* Fetch first, page_initialize may overwrite the values */
 	vm_initializer *init = uninit->init;
 	void *aux = uninit->aux;
 
 	/* TODO: You may need to fix this function. */
+	// HACK: 뭘 어쩌라고
 	return uninit->page_initializer (page, uninit->type, kva) &&
 		(init ? init (page, aux) : true);
 }
@@ -60,6 +82,14 @@ uninit_initialize (struct page *page, void *kva) {
  * to other page objects, it is possible to have uninit pages when the process
  * exit, which are never referenced during the execution.
  * PAGE will be freed by the caller. */
+
+
+/* uninit_page 가 보유한 자원을 해제합니다.
+ * 대부분의 페이지는 다른 페이지 객체로 변환되지만,
+ * 프로세스 종료 시까지 한 번도 참조되지 않은 uninit 페이지가 남아 있을 수 있습니다.
+ * PAGE 자체는 호출자가 해제합니다.
+ */
+
 static void
 uninit_destroy (struct page *page) {
 	struct uninit_page *uninit UNUSED = &page->uninit;
