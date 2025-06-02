@@ -141,7 +141,7 @@ page_fault (struct intr_frame *f) {
 	user = (f->error_code & PF_U) != 0;
 
 	// project 2. user programs: bad ~
-	exit(-1);
+	// exit(-1);
 	// ~ project 2. user programs: bad
 
 #ifdef VM

@@ -60,22 +60,23 @@ uninit_new (struct page *page, void *va, vm_initializer *init,
  */
 
 // 최초 페이지 폴트 발생 시 호출
-// 내부에서 저장된 초기화 함수(init)와 aux 정보를 사용해 `anon_initializer` 등 호출
+// 내부에서 저장된 초기화 함수(init)와 aux 정보를 사용해 `anon_initializer`, `file_backed_initializer`, `page_cache..` 등 호출
 /* Initalize the page on first fault */
 static bool
-uninit_initialize (struct page *page, void *kva) {
-	
+uninit_initialize (struct page *page, void *kva) { // 페이지와 커널 가상 주소를 인수로 받아. 
+	// NOTE: 커널 가상 주소(kva)는 왜 받지? 
 	struct uninit_page *uninit = &page->uninit;
 
 	/* 우선 가져오고, page_initialize가 값을 덮어씌운다. */
 	/* Fetch first, page_initialize may overwrite the values */
-	vm_initializer *init = uninit->init;
+	vm_initializer *init = uninit->init; // uninit 구조체만의 속성을 초기화해주는 함수
 	void *aux = uninit->aux;
 
 	/* TODO: You may need to fix this function. */
 	// HACK: 뭘 어쩌라고
+	// NOTE: 아래 page_initializer 자리에 `anon_initializer` 등의 이니셜라이저가 들어가는 거 같다.
 	return uninit->page_initializer (page, uninit->type, kva) &&
-		(init ? init (page, aux) : true);
+		(init ? init (page, aux) : true); // uninit page가 상속받은 page 구조체를 초기화하는 함수.
 }
 
 /* Free the resources hold by uninit_page. Although most of pages are transmuted
@@ -89,10 +90,11 @@ uninit_initialize (struct page *page, void *kva) {
  * 프로세스 종료 시까지 한 번도 참조되지 않은 uninit 페이지가 남아 있을 수 있습니다.
  * PAGE 자체는 호출자가 해제합니다.
  */
-
 static void
 uninit_destroy (struct page *page) {
-	struct uninit_page *uninit UNUSED = &page->uninit;
+	struct uninit_page *uninit = &page->uninit;
+	// TODO: 대체 뭘 하란 거야?
+	return;
 	/* TODO: Fill this function.
 	 * TODO: If you don't have anything to do, just return. */
 }

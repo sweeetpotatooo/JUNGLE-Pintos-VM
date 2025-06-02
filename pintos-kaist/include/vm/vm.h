@@ -135,5 +135,5 @@ void vm_dealloc_page (struct page *page);
 bool vm_claim_page (void *va);
 enum vm_type page_get_type (struct page *page);
 void spt_destructor(struct hash_elem *he);
-
+uint64_t page_hash(const struct hash_elem *e, void *aux);
 #endif  /* VM_VM_H */

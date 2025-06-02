@@ -366,7 +366,7 @@ int process_exec(void *f_name)
 	if (!success)
 	{
 		palloc_free_page(file_name);
-		return -1;
+		return -1; 
 	}
 
 	//  Project 2. User Programs의 Argument Passing ~
@@ -553,13 +553,16 @@ static bool load(const char *file_name, struct intr_frame *if_)
 	off_t file_ofs;
 	bool success = false;
 	int i;
-
+	// process 쪽에서는 dprintf 씁시다.
+	dprintf("[LOAD]load start\n");
 	/* Allocate and activate page directory. */
 	t->pml4 = pml4_create();
 	if (t->pml4 == NULL)
-		goto done;
+	goto done;
+	dprintf("[LOAD] pml4 create done.\n");
 	process_activate(thread_current());
-
+	dprintf("[LOAD] pml4 activated\n");
+	
 	/* Open executable file. */
 	file = filesys_open(file_name);
 	if (file == NULL)
@@ -567,15 +570,18 @@ static bool load(const char *file_name, struct intr_frame *if_)
 		printf("load: %s: open failed\n", file_name);
 		goto done;
 	}
-
+	dprintf("[LOAD] exec file opened\n");
+	
 	/* Read and verify executable header. */
 	if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr || memcmp(ehdr.e_ident, "\177ELF\2\1\1", 7) || ehdr.e_type != 2 || ehdr.e_machine != 0x3E // amd64
-		|| ehdr.e_version != 1 || ehdr.e_phentsize != sizeof(struct Phdr) || ehdr.e_phnum > 1024)
+	|| ehdr.e_version != 1 || ehdr.e_phentsize != sizeof(struct Phdr) || ehdr.e_phnum > 1024)
 	{
 		printf("load: %s: error loading executable\n", file_name);
 		goto done;
 	}
-
+	dprintf("[LOAD] verified executable header\n");
+	
+	
 	/* Read program headers. */
 	file_ofs = ehdr.e_phoff;
 	for (i = 0; i < ehdr.e_phnum; i++)
@@ -633,26 +639,32 @@ static bool load(const char *file_name, struct intr_frame *if_)
 			break;
 		}
 	}
-
+	dprintf("[LOAD] program header read complete\n");
+	
 	/* TODO: Your code goes here.
-	 * TODO: Implement argument passing (see project2/argument_passing.html). */
-
+	* TODO: Implement argument passing (see project2/argument_passing.html). */
+	
 	// project 2. user programs - rox ~
 	// 현재 스레드의 실행 중인 파일에 이 파일을 추가.
 	t->running = file;
-
+	
 	// 지금 읽고 있는 실행 파일에 뭐 쓰면 안되니까.
 	file_deny_write(file); // 해당 파일을 쓰기 금지로 등록
 	// ~ project 2. user programs - rox
-
+	
 	/* Set up stack. */
-	if (!setup_stack(if_))
+	if (!setup_stack(if_)){
+		dprintf("[LOAD] setup stack failed\n");
 		goto done;
 
+	}
+	dprintf("[LOAD] setup stack complete\n");
+	// pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/userprog/args-none:args-none --swap-disk=4 -- -q   -f run args-none 
 	/* Start address. */
 	if_->rip = ehdr.e_entry;
-
+	
 	success = true;
+	dprintf("[LOAD] load complete!\n");
 
 done:
 	/* We arrive here whether the load is successful or not. */
@@ -906,23 +918,41 @@ setup_stack(struct intr_frame *if_)
 {
 	bool success = false;
 	void *stack_bottom = (void *)(((uint8_t *)USER_STACK) - PGSIZE); // 유저 프로세스의 가상 주소상의 stack bottom
-
+	dprintf("[SETUP_STACK] setup stack started\n");
 	/* stack_bottom에 스택을 매핑한 뒤 즉시 페이지를 claim 하십시오.
-	 * 성공하면 rsp 값을 적절히 설정합니다.
-	 * 해당 페이지를 스택으로 표시해야 합니다. */
+	* 성공하면 rsp 값을 적절히 설정합니다.
+	* 해당 페이지를 스택으로 표시해야 합니다. */
 	/* 여기에 코드 작성 */
 	// You might need to provide the way to identify the stack. 
 	// You can use the auxillary markers in vm_type of vm/vm.h 
 	// (e.g. VM_MARKER_0) to mark the page.
-	if (vm_alloc_page_with_initializer(VM_MARKER_STACK, stack_bottom, true, anon_initializer, NULL)) // HACK: 마커 이렇게 쓰면 되는지 잘 모르겠음. 전반적으로 잘 모르겠음.
+	struct hash_iterator hi;
+	hash_first(&hi, &thread_current()->spt.hash);
+	while(hi.elem){
+		struct page *tmp_page = hash_entry(hi.elem, struct page, hash_elem);
+		dprintf("[setup_stack] iterating spt hash. %p\n", tmp_page->va);
+		hash_next(&hi);
+	}
+	dprintf("[SETUP_STACK] allocating stack bottom: %p\n", stack_bottom);
+	if (vm_alloc_page_with_initializer(VM_ANON, stack_bottom, true, anon_initializer, NULL)) // HACK: 마커 이렇게 쓰면 되는지 잘 모르겠음. 전반적으로 잘 모르겠음.
 	{
+		// 여기서는 spt 덤프 시키면 페이지 하나 나와야 됨.
+		hash_first(&hi, &thread_current()->spt.hash);
+		while(hi.elem){
+			struct page *tmp_page = hash_entry(hi.elem, struct page, hash_elem);
+			dprintf("[setup_stack] iterating spt hash. %p\n", tmp_page->va);
+			hash_next(&hi);
+		}
+		dprintf("[SETUP_STACK] vm_alloc_page_with_initializer complete\n");
 		success = vm_claim_page(stack_bottom); // 바로 이 주소로 프레임을 할당.
 		if (success)
 		{
+			dprintf("[SETUP_STACK] page claimed\n");
 			if_->rsp = USER_STACK;
 		}
 	}
-
+	
+	dprintf("[SETUP_STACK] returning success or fail\n");
 	return success;
 }
 
