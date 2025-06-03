@@ -22,7 +22,7 @@ void vm_anon_init(void)
 {
     /* swap_disk를 설정하세요. */
     swap_disk = NULL;
-    swap_disk = disk_get(1, 1); // HACK: disk_get 인자값을 잘 모르겠음.
+    swap_disk = disk_get(1, 1); // HACK: disk_get 인자값을 잘 모르겠음. 
 }
 
 // “이 함수는 먼저 page->operations에서 익명 페이지에 대한 핸들러를 설정합니다. 현재 빈 구조체인 anon_page에서
@@ -31,17 +31,17 @@ void vm_anon_init(void)
 /* 파일 매핑을 초기화합니다 */
 bool anon_initializer(struct page *page, enum vm_type type, void *kva)
 {
-
     /* 핸들러 설정 */
-    dprintfc("[anon_initializer] page va: %p\n", page->va);
+    dprintfc("[anon_initializer] routine start page va: %p\n", page->va);
     
     page->operations = &anon_ops;
     
     dprintfc("[anon_initializer] setting anon_ops. %p\n", page->operations);
     
     struct anon_page *anon_page = &page->anon;
-    dprintfc("[anon_initializer] returning true\n");
-    return true; // 수박 여기서 true 리턴해주잖아.
+    // TODO: anon_page 속성 추가될 경우 여기서 초기화.
+    dprintfc("[anon_initializer] done. returning true\n");
+    return true; 
 }
 
 /* 스왑 디스크에서 내용을 읽어 페이지를 스왑인합니다 */
