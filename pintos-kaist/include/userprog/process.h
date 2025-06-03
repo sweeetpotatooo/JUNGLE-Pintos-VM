@@ -19,6 +19,7 @@ struct lazy_aux {
     struct file *file;
     int read_bytes;
     int zero_bytes;
+    int ofs;
 };
 
 #endif /* userprog/process.h */
