@@ -34,7 +34,7 @@ static const struct page_operations uninit_ops = {
 
 /* DO NOT MODIFY this function */
 void
-uninit_new (struct page *page, void *va, vm_initializer *init,
+uninit_new (struct page *page, void *va, vm_initializer *init, // 얘가 load에서 lazy_load_segment로 넘어옴
 		enum vm_type type, void *aux,
 		bool (*initializer)(struct page *, enum vm_type, void *)) {
 	ASSERT (page != NULL);
@@ -44,10 +44,10 @@ uninit_new (struct page *page, void *va, vm_initializer *init,
 		.va = va,
 		.frame = NULL, /* no frame for now */
 		.uninit = (struct uninit_page) {
-			.init = init,
+			.init = init, // 이건 완전 특수한 목적. lazy_load_segment같은.
 			.type = type,
 			.aux = aux,
-			.page_initializer = initializer,
+			.page_initializer = initializer, // 페이지 이니셜라이저.
 		}
 	};
 }
@@ -71,7 +71,7 @@ uninit_initialize (struct page *page, void *kva) { // 페이지와 커널 가상
 	/* Fetch first, page_initialize may overwrite the values */
 	vm_initializer *init = uninit->init; // uninit 구조체만의 속성을 초기화해주는 함수
 	void *aux = uninit->aux;
-
+	dprintfc("여기있었지요~\n");
 	/* TODO: You may need to fix this function. */
 	// HACK: 뭘 어쩌라고
 	// NOTE: 아래 page_initializer 자리에 `anon_initializer` 등의 이니셜라이저가 들어가는 거 같다.

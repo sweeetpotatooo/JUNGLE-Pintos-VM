@@ -37,14 +37,15 @@ void debug_backtrace (void);
 #define NOT_REACHED() for (;;)
 #endif /* lib/debug.h */
 
-#define DEBUG_PRINT
+// #define DEBUG_PRINT
 
 #ifdef DEBUG_PRINT
 #define dprintf(...) printf(__VA_ARGS__)
 #else
 #define dprintf(...) ((void)0)
 #endif
-#define DEBUG_PRINTA
+
+// #define DEBUG_PRINTA
 
 #ifdef DEBUG_PRINTA
 #define dprintfa(...) printf(__VA_ARGS__)
@@ -52,7 +53,7 @@ void debug_backtrace (void);
 #define dprintfa(...) ((void)0)
 #endif
 ////////////////////////
-#define DEBUG_PRINTB
+// #define DEBUG_PRINTB
 
 #ifdef DEBUG_PRINTB
 #define dprintfb(...) printf(__VA_ARGS__)

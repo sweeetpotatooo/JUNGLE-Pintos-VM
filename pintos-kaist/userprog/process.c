@@ -835,6 +835,7 @@ install_page(void *upage, void *kpage, bool writable)
 	return (pml4_get_page(t->pml4, upage) == NULL && pml4_set_page(t->pml4, upage, kpage, writable));
 }
 #else
+
 /* 여기부터의 코드는 프로젝트 3 이후에 사용됩니다.
  * 함수 구현이 프로젝트 2까지만 필요하다면
  * 위쪽 블록에 구현하십시오. */
@@ -845,20 +846,23 @@ lazy_load_segment(struct page *page, void *aux)
 	/* TODO: 파일에서 세그먼트를 읽어옵니다. */
 	/* TODO: 이 함수는 주소 VA에서 첫 페이지 폴트가 발생했을 때 호출됩니다. */
 	/* TODO: 이 함수를 호출할 때 VA를 사용할 수 있습니다. */
-
+	dprintfc("[lazy_load_segment] routine start. page: %p, page->va: %p\n", page, page->va);
 	void *va = page->va; // RAM에 없음. 따라서 프레임 할당 해줘야 함. 그리고 이떄! 그 프레임은 또 파일 정보가 없으니까, 파일에서 세그먼트를 읽어와야 합니다.
-						 // load_segment에서 파일에서 세그먼트 읽기 위한 정보 잘 설정해주고, 여기서 잘 까서 읽어주면 됨.
+						 // load_segment에서 파일에서 세그먼트 읽기 위한 정보 잘 설정해주고, 여기서***** 잘 까서 읽어주면 됨.
 						 // 읽을 때 필요한 정보가 뭐냐? 위에 참고하세요
 	/* Load this page. */
 	struct lazy_aux *lazy_aux = (struct lazy_aux *)aux;
-
-	if (file_read(lazy_aux->file, page, lazy_aux->read_bytes) != (int)lazy_aux->read_bytes) // 파일에서 세그먼트 읽어 옴.
+	dprintfc("[lazy_load_segment] about to read file\n");
+	if (file_read(lazy_aux->file, page->frame->kva, lazy_aux->read_bytes) != (int)lazy_aux->read_bytes) // 파일에서 세그먼트 읽어 옴.
 	{
-		palloc_free_page(page); // HACK: 페이지를 여기서 할당 해제해줘도 되나?
+		dprintfc("[lazy_load_segment] file read failed\n");
+		// palloc_free_page(page); // HACK: 페이지를 여기서 할당 해제해줘도 되나?
 		return false;
 	}
-	memset(page + lazy_aux->zero_bytes, 0, lazy_aux->zero_bytes); // zero bytes 설정.
-	return vm_claim_page(page);
+	dprintfc("[lazy_load_segment] file read complete\n");
+	memset(page->frame->kva + lazy_aux->read_bytes, 0, lazy_aux->zero_bytes); // zero bytes 설정.
+	dprintfc("[lazy_load_segment] zero bytes copied\n");
+	return true;
 }
 
 /* FILE의 OFS(오프셋)부터 시작하는 세그먼트를
@@ -879,7 +883,7 @@ static bool
 load_segment(struct file *file, off_t ofs, uint8_t *upage,
 			 uint32_t read_bytes, uint32_t zero_bytes, bool writable)
 {
-	ASSERT((read_bytes + zero_bytes) % PGSIZE == 0);
+	ASSERT((read_bytes + zero_bytes) % PGSIZE == 0);₩
 	ASSERT(pg_ofs(upage) == 0);
 	ASSERT(ofs % PGSIZE == 0);
 

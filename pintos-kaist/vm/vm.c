@@ -126,17 +126,6 @@ spt_find_page(struct supplemental_page_table *spt, void *va)
 
 	input_page.va = pg_round_down(va);
 	dprintfa("[spt_find_page] va value: %p -round_down-> %p\n", va, input_page.va);
-	struct hash_iterator hi;
-	hash_first(&hi, &thread_current()->spt.hash);
-	while(hi.elem){
-		struct page *tmp_page = hash_entry(hi.elem, struct page, hash_elem);
-		dprintf("[setup_stack] iterating spt hash. %p\n", tmp_page->va);
-		uint64_t hash1 = page_hash(&input_page.hash_elem, NULL);
-		uint64_t hash2 = page_hash(&(*tmp_page).hash_elem, NULL);
-		dprintf("page 값: %p, 안에 있는 거 %p\n", input_page.va, tmp_page->va); 
-		dprintf("시바 여기 있잖아. 찾는 거: %ld, 안에 있는 거 %ld\n", hash1, hash2); 
-		hash_next(&hi);
-	}
 	e = hash_find(&spt->hash, &input_page.hash_elem); // hash_find는 hash 구조체와 hash_elem을 인수로 받음.
 	if (e != NULL)
 	{
@@ -247,17 +236,76 @@ static bool
 vm_handle_wp(struct page *page UNUSED)
 {
 }
+/* 
+Handling page fault
+The most important user of the supplemental page table is 
+the page fault handler. In project 2, a page fault always indicated a bug in the kernel 
+or a user program. In project 3, this is no longer true. 
+Now, a page fault might only indicate that the page must be brought in 
+from a file or swap slot. You will have to implement a more sophisticated page fault handler
+ to handle these cases. The page fault handler, which is page_fault() in userprog/exception.c, 
+ calls your page fault handler, vm_try_handle_fault() in vm/vm.c. 
+ Your page fault handler needs to do roughly the following:
+
+1. Locate the page that faulted in the supplemental page table. 
+If the memory reference is valid, use the supplemental page table entry to locate the data that goes in the page, 
+which might be in the file system, or in a swap slot, or it might simply be an all-zero page. 
+If you implement sharing (i.e., Copy-on-Write), 
+the page's data might even already be in a page frame, but not in the page table. 
+If the supplemental page table indicates that the user process should not expect any data at the address it was trying to access, 
+or if the page lies within kernel virtual memory, or if the access is an attempt to write to a read-only page, then the access is invalid. 
+Any invalid access terminates the process and thereby frees all of its resources.
+
+2. Obtain a frame to store the page. If you implement sharing, the data you need may already be in a frame, 
+in which case you must be able to locate that frame.
+
+3. Fetch the data into the frame, by reading it from the file system or swap, zeroing it, etc.
+ If you implement sharing, the page you need may already be in a frame, 
+in which case no action is necessary in this step.
+
+4. Point the page table entry for the faulting virtual address to the physical page. 
+You can use the functions in threads/mmu.c.
+
+ */
+
+
+// 페이지 폴트 처리
+
+// 보충 페이지 테이블의 가장 중요한 사용자는 페이지 폴트 핸들러입니다. 프로젝트 2에서는 페이지 폴트가 항상 커널 또는 사용자 프로그램에서 버그를 의미했습니다. 
+// 그러나 프로젝트 3에서는 이제 그렇지 않습니다. 이제 페이지 폴트는 단순히 페이지를 파일이나 스왑 슬롯에서 가져와야 함을 나타냅니다. 이 경우를 처리하기 위해 더 정교한 페이지 폴트 핸들러를 구현해야 합니다. 
+// 페이지 폴트 핸들러인 page_fault() (userprog/exception.c)는 vm_try_handle_fault()라는 함수(이 함수는 vm/vm.c에 있음)를 호출하여 이를 처리합니다. 이 페이지 폴트 핸들러는 대체로 다음과 같이 해야 합니다:
+
+// 	1.	보충 페이지 테이블에서 폴트가 발생한 페이지 찾기
+// 메모리 참조가 유효한 경우, 보충 페이지 테이블 항목을 사용하여 페이지에 들어갈 데이터를 찾습니다. 데이터는 파일 시스템, 스왑 슬롯에 있을 수 있으며, 아예 0으로 채워진 페이지일 수도 있습니다. 
+// 공유(예: Copy-on-Write)를 구현하면 페이지의 데이터가 이미 페이지 프레임에 있을 수도 있지만, 페이지 테이블에는 없을 수 있습니다. 보충 페이지 테이블이 사용자 프로세스가 해당 주소에서 데이터를 기대해서는 안 된다고 나타내거나, 
+// 페이지가 커널 가상 메모리 범위 내에 있거나, 읽기 전용 페이지에 쓰기를 시도하는 경우, 이 접근은 유효하지 않습니다. 모든 유효하지 않은 접근은 프로세스를 종료시키고 그 자원을 모두 해제합니다.
+
+// 	2.	페이지를 저장할 프레임 확보하기
+// 공유를 구현한 경우, 필요한 데이터가 이미 프레임에 있을 수 있으므로 그 프레임을 찾을 수 있어야 합니다.
+
+// 	3.	프레임에 데이터를 가져오기
+// 데이터를 파일 시스템 또는 스왑에서 읽어오거나, 데이터를 0으로 채우는 등의 방법으로 프레임에 데이터를 가져옵니다. 공유를 구현한 경우, 
+// 필요한 페이지가 이미 프레임에 있을 수도 있으므로 이 단계에서는 아무 작업도 필요하지 않을 수 있습니다.
+
+// 	4.	폴팅된 가상 주소에 대해 페이지 테이블 항목을 물리적 페이지로 설정하기
+// threads/mmu.c에 있는 함수들을 사용하여 이를 설정합니다.
+ 
 
 /* 성공 시 true를 반환합니다. */
 bool vm_try_handle_fault(struct intr_frame *f, void *addr,
 						 bool user, bool write, bool not_present)
 {
-	struct supplemental_page_table *spt = &thread_current()->spt;
-	struct page *page = NULL;
+	dprintfc("[vm_try_handle_fault] fault handle start. addr: %p\n", addr);
+	struct supplemental_page_table *spt = &thread_current()->spt; // 현재 쓰레드의 spt 가져옴.
+	struct page *page = spt_find_page(spt, addr); // page를 null로 설정해
+	dprintfc("[vm_try_handle_fault] fault handler found page. page->va: %p\n", page->va);
 	/* TODO: 예외에 대한 유효성 검사 수행 */
 	/* TODO: 여기에 코드를 작성하세요. */
 	// PANIC("vm try handle fault까지 왔음.");
-	return vm_do_claim_page(page);
+	// 중간에 이 페이지가 뭔지 정의되는 과정이 없음. 그 정의는 어디 있어?
+	bool result = vm_do_claim_page(page);
+	dprintfc("[vm_try_handle_fault] result %d\n", result);
+	return  result; // 그 페이지에 대응하는 프레임을 할당받아. 
 }
 
 /* 페이지를 해제합니다.
@@ -297,10 +345,10 @@ bool vm_claim_page(void *va) // 이 함수의 목적은 뭔가요?
 static bool
 vm_do_claim_page(struct page *page) // 페이지가 주어져 있음. 함수의 목표는? 주어진 페이지를 어느 프레임에 연결시켜주는 것.
 {
-	ASSERT(page != NULL);
+	ASSERT(page != NULL); // 여기 걸렸네.
 	struct frame *frame = vm_get_frame(); // 메모리 공간에서 프레임 하나 확보
 	ASSERT(frame != NULL);
-	dprintfa("[vm_do_claim_page] routine start\n");
+	dprintfc("[vm_do_claim_page] routine start. page->va: %p\n", page->va);
 	/* 링크 설정 */
 	frame->page = page; // 각각을 의미하는 구조체를 서로 링크시켜줌. page 구조체는 페이지 자체가 아니다. representation이지.
 	page->frame = frame;
@@ -309,19 +357,22 @@ vm_do_claim_page(struct page *page) // 페이지가 주어져 있음. 함수의 
 	{
 		if (!pml4_set_page(thread_current()->pml4, page->va, frame->kva, page->writable)) // HACK: writable 이렇게 추가하는 거 맞나요?
 		{
-			dprintfa("[vm_do_claim_page] pml4 set failed\n");
+			dprintfc("[vm_do_claim_page] pml4 set failed\n");
 			return false;
 		}
 	}
 	// PANIC("pml4 set page 성공 frame->va: %p, frame->kva: %p, type: %d", page->va, frame->kva, page_get_type(page));
-	dprintfa("[vm_do_claim_page] do claim success. swapping in. swap in operation: %p\n", page->operations->swap_in);
-	return swap_in(page, frame->kva);
+	dprintfc("[vm_do_claim_page] do claim success. va: %p, pa: %p\n", page->va, page->frame->kva);
+	// 이 밑에는 사실 지금은 안 해도 되는 것.
+	bool result = swap_in(page, frame->kva);
+	dprintfc("[vm_do_claim_page] result: %d", result);
+	return result;
 }
 
 uint64_t page_hash(const struct hash_elem *e, void *aux)
 {
 	struct page *p = hash_entry(e, struct page, hash_elem);
-	return hash_bytes(&p, sizeof(p->va));
+	return hash_bytes(&p->va, sizeof(p->va)); 
 }
 
 /* 두 page의 va를 기준으로 정렬을 비교한다. */

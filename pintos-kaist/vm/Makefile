@@ -5,8 +5,8 @@ vm:
 	make -j && \
 	cd ./build && \
 	make check
-.PHONY: vmdebug
-vmdebug:
+.PHONY: debug
+debug:
 	make clean && \
 	make -j && \
 	cd ./build && \
