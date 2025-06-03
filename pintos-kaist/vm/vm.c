@@ -9,6 +9,7 @@
 #include "threads/mmu.h"
 #include "vm/uninit.h"
 #include "lib/kernel/hash.h"
+#include "userprog/process.h"
 
 /* 가상 메모리 서브시스템을 초기화합니다.
  * 각 서브시스템의 초기화 코드를 호출합니다. */
@@ -61,19 +62,19 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writabl
 
 	ASSERT(VM_TYPE(type) != VM_UNINIT) // DEBUG: 여기서 걸림. 주어진 타입으로 uninit_page를 바꿔줘야 되는 함수. uninit으로 uninit을 만들라는 이상한 명령인지 검사.
 	dprintfa("[vm_alloc_page_with_initializer] routine start. upage %p\n", upage);
-	
+
 	struct supplemental_page_table *spt = &thread_current()->spt;
-	
+
 	/* 해당 upage가 이미 존재하는지 확인합니다. */
 	upage = pg_round_down(upage);
-	
+
 	if (spt_find_page(spt, upage) == NULL) // 페이지가 존재하지 않는다면
 	{
 		dprintfa("[vm_alloc_page_with_initializer] upage not found in spt\n");
-		/* 
-		* NOTE:  페이지 메타데이터는 프로세스 생명주기와 독립적으로 관리되어야 함. 따라서 함수의 생명 주기에 종속된 스택 변수 대신 
-		* 별도의 메모리 공간에 메타 데이터를 저장해야 함. 이렇게 활용하기 위해 메모리에 커널 풀 영역이 있음.
-		*/
+		/*
+		 * NOTE:  페이지 메타데이터는 프로세스 생명주기와 독립적으로 관리되어야 함. 따라서 함수의 생명 주기에 종속된 스택 변수 대신
+		 * 별도의 메모리 공간에 메타 데이터를 저장해야 함. 이렇게 활용하기 위해 메모리에 커널 풀 영역이 있음.
+		 */
 		struct page *page = malloc(sizeof(struct page)); // page 메타 데이터 저장을 위한 메모리 할당.
 		if (page == NULL)
 		{
@@ -81,9 +82,9 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writabl
 		}
 
 		dprintfa("[vm_alloc_page_with_initializer] page allocated\n");
-		
+
 		/* 페이지를 생성. uninit_new에 page 주소와 va(upage) 값을 넘겨주면 알아서 초기화해준다.
-		 * VM 타입에 맞는 초기화 함수를 가져와서, 
+		 * VM 타입에 맞는 초기화 함수를 가져와서,
 		 * uninit_new를 호출하여 "uninit" 페이지 구조체를 생성하세요.
 		 * TODO: 생성 이후 필요한 필드를 수정하세요.
 		 */
@@ -106,7 +107,7 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writabl
 		page->writable = writable;
 
 		dprintfa("[vm_alloc_page_with_initializer] inserting page into spt\n");
-		
+
 		/* 생성한 페이지를 spt에 삽입하세요. */
 		return spt_insert_page(spt, page);
 	}
@@ -129,9 +130,9 @@ spt_find_page(struct supplemental_page_table *spt, void *va)
 
 	struct page find_page;
 	memset(&find_page, 0, sizeof(find_page)); // 전체 초기화
-	
+
 	struct hash_elem *e;
-	
+
 	find_page.va = pg_round_down(va);
 
 	e = hash_find(&spt->hash, &find_page.hash_elem); // hash_find는 hash 구조체와 hash_elem을 인수로 받음.
@@ -154,7 +155,7 @@ bool spt_insert_page(struct supplemental_page_table *spt,
 {
 	int succ = false;
 	dprintfa("[spt_insert_page] routine started. va of inserting page: %p\n", page->va);
-	if (spt == NULL || page == NULL) 
+	if (spt == NULL || page == NULL)
 	{
 		dprintfa("[spt_insert_page] validation failed\n");
 		return false;
@@ -165,7 +166,7 @@ bool spt_insert_page(struct supplemental_page_table *spt,
 		dprintfa("[spt_insert_page] insert success\n");
 		succ = true;
 	}
-	else 
+	else
 	{
 		dprintfa("[spt_insert_page] insert failed\n");
 		succ = false;
@@ -229,7 +230,7 @@ vm_get_frame(void)
 	frame->kva = palloc_get_page(PAL_USER);
 	if (frame->kva == NULL)
 	{
-		free(frame); // frame 메타 데이터 자료구조 해제
+		free(frame);			  // frame 메타 데이터 자료구조 해제
 		frame = vm_evict_frame(); // TODO: evict frame 함수가 아직 구현되지 않음.
 	}
 	ASSERT(frame->kva != NULL);
@@ -332,7 +333,7 @@ void vm_dealloc_page(struct page *page)
 // 1. va가 주어짐(va는 결국 페이지 주소에 딱 맞지 않게 주어질 수도 있는 것임)
 // 2. va에 해당하는 페이지(가상 연속 공간)를 찾아냄
 // 3. 그 페이지에 프레임(물리 연속 공간)을 바로 연결지어줌.
-bool vm_claim_page(void *va) 
+bool vm_claim_page(void *va)
 {
 	ASSERT(va != NULL);
 	dprintfa("[VM_CLAIM_PAGE] routine start. va: %p\n", va);
@@ -340,7 +341,7 @@ bool vm_claim_page(void *va)
 	struct page *page = NULL;
 	page = spt_find_page(&thread_current()->spt, va); // va를 가지고 현재 쓰레드의 spt 에서 페이지를 찾아냄.
 	if (page == NULL)
-	{ 
+	{
 		// spt에 없으면 false 리턴.
 		dprintfa("[VM_CLAIM_PAGE] no found in spt\n");
 		return false;
@@ -355,14 +356,14 @@ bool vm_claim_page(void *va)
 // 페이지 테이블에 가상 주소 → 물리 주소 매핑을 추가해야 합니다.
 // - 성공 여부를 반환해야 합니다.
 static bool
-vm_do_claim_page(struct page *page) 
+vm_do_claim_page(struct page *page)
 {
 	ASSERT(page != NULL);
 	dprintfc("[vm_do_claim_page] routine start. page->va: %p\n", page->va);
 
 	struct frame *frame = vm_get_frame(); // 메모리 공간에서 프레임 하나 확보
 	ASSERT(frame != NULL);
-	
+
 	/* 링크 설정 */
 	frame->page = page; // 각각을 의미하는 구조체를 서로 링크시켜줌.
 	page->frame = frame;
@@ -370,7 +371,7 @@ vm_do_claim_page(struct page *page)
 	/* 페이지의 VA와 프레임의 PA를 매핑하기 위해 페이지 테이블 엔트리를 삽입하세요. */
 	if (pml4_get_page(thread_current()->pml4, page->va) == NULL) // 기존에 매핑된 페이지에 새로운 물리 프레임의 유출 방지
 	{
-		if (!pml4_set_page(thread_current()->pml4, page->va, frame->kva, page->writable)) 
+		if (!pml4_set_page(thread_current()->pml4, page->va, frame->kva, page->writable))
 		{
 			dprintfc("[vm_do_claim_page] pml4 set failed\n");
 			return false;
@@ -410,22 +411,34 @@ void supplemental_page_table_init(struct supplemental_page_table *spt UNUSED)
 bool supplemental_page_table_copy(struct supplemental_page_table *dst,
 								  struct supplemental_page_table *src)
 {
-	ASSERT(src != NULL);
+	ASSERT(src != NULL); // 포인터 유효성 검사
 	ASSERT(dst != NULL);
+	dprintfe("[supplemental_page_table_copy] routine start\n");
 
-	struct hash_iterator hi;
-	struct hash *src_hash = &src->hash;
+	struct hash_iterator hi;			// 이터레이터 선언
+	struct hash *src_hash = &src->hash; // source hash 포인터 지정
 
-	// hash iterator initialized
-	hash_first(&hi, src_hash);
-	for (; hi.elem != NULL; hash_next(&hi))
+	hash_first(&hi, src_hash); // 이터레이터 초기화
+	while (hash_next(&hi))	   // 각 페이지를 순회하는 루프.
 	{
-		struct page *src_page = hash_entry(hi.elem, struct page, hash_elem);
-		struct page *dest_page;
-		vm_alloc_page(page_get_type(src_page), src_page->va, src_page->writable); // 결국 uninit_page를 만들긴 함.
-		vm_claim_page(src_page->va);											  // src_page의 가상 주소를 가지고 현재 쓰레드의 spt에서 페이지를 찾아서 프레임을 할당해준다. spt 복사하는데 이게 왜 있어야 하는 거?
-		spt_insert_page(src, src_page);
+		struct page *src_page = hash_entry(hash_cur(&hi), struct page, hash_elem); // 해쉬 요소로부터 페이지 구조체 추출
+		struct page *dst_page;													   // 목적지 페이지 포인터 선언
+		enum vm_type type = page_get_type(src_page);
+		void *aux = NULL;
+		if (type == VM_ANON)
+		{
+			struct lazy_aux *src_aux = src_page->uninit.aux;
+			struct lazy_aux *new_aux = malloc(sizeof(struct lazy_aux));
+			aux = new_aux;
+		}
+		dprintfe("[supplemental_page_table_copy] src page va: %p\n", src_page->va);
+
+		vm_alloc_page_with_initializer(type, src_page->va, src_page->writable, NULL, aux); // source를 기준으로 페이지 메타 데이터 생성
+
+		vm_claim_page(src_page->va);	// src_page의 가상 주소를 가지고 현재 쓰레드의 spt에서 페이지를 찾아서 프레임을 할당해준다.
+		spt_insert_page(dst, src_page); // 목적지 spt에 src page 삽입해준다.
 	}
+	return true;
 }
 
 /* supplemental page table이 가지고 있는 리소스를 해제합니다. */
@@ -433,7 +446,6 @@ void supplemental_page_table_kill(struct supplemental_page_table *spt)
 {
 	/* TODO: 해당 스레드가 가지고 있는 supplemental page table의 모든 항목을 제거하고,
 	 * TODO: 수정된 내용을 저장소에 기록하세요(write-back). */
-	// NOTE: 민혁이가 clear 쓰라고 함
 	hash_clear(&spt->hash, spt_destructor); // HACK: destructor 뭘로 줘야 하는지 모르겠음
 }
 
