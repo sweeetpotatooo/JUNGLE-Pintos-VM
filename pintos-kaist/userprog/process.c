@@ -366,7 +366,7 @@ int process_exec(void *f_name)
 	if (!success)
 	{
 		palloc_free_page(file_name);
-		return -1; 
+		return -1;
 	}
 
 	//  Project 2. User Programs의 Argument Passing ~
@@ -558,11 +558,11 @@ static bool load(const char *file_name, struct intr_frame *if_)
 	/* Allocate and activate page directory. */
 	t->pml4 = pml4_create();
 	if (t->pml4 == NULL)
-	goto done;
+		goto done;
 	dprintf("[LOAD] pml4 create done.\n");
 	process_activate(thread_current());
 	dprintf("[LOAD] pml4 activated\n");
-	
+
 	/* Open executable file. */
 	file = filesys_open(file_name);
 	if (file == NULL)
@@ -571,17 +571,16 @@ static bool load(const char *file_name, struct intr_frame *if_)
 		goto done;
 	}
 	dprintf("[LOAD] exec file opened\n");
-	
+
 	/* Read and verify executable header. */
 	if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr || memcmp(ehdr.e_ident, "\177ELF\2\1\1", 7) || ehdr.e_type != 2 || ehdr.e_machine != 0x3E // amd64
-	|| ehdr.e_version != 1 || ehdr.e_phentsize != sizeof(struct Phdr) || ehdr.e_phnum > 1024)
+		|| ehdr.e_version != 1 || ehdr.e_phentsize != sizeof(struct Phdr) || ehdr.e_phnum > 1024)
 	{
 		printf("load: %s: error loading executable\n", file_name);
 		goto done;
 	}
 	dprintf("[LOAD] verified executable header\n");
-	
-	
+
 	/* Read program headers. */
 	file_ofs = ehdr.e_phoff;
 	for (i = 0; i < ehdr.e_phnum; i++)
@@ -640,29 +639,29 @@ static bool load(const char *file_name, struct intr_frame *if_)
 		}
 	}
 	dprintf("[LOAD] program header read complete\n");
-	
+
 	/* TODO: Your code goes here.
-	* TODO: Implement argument passing (see project2/argument_passing.html). */
-	
+	 * TODO: Implement argument passing (see project2/argument_passing.html). */
+
 	// project 2. user programs - rox ~
 	// 현재 스레드의 실행 중인 파일에 이 파일을 추가.
 	t->running = file;
-	
+
 	// 지금 읽고 있는 실행 파일에 뭐 쓰면 안되니까.
 	file_deny_write(file); // 해당 파일을 쓰기 금지로 등록
 	// ~ project 2. user programs - rox
-	
+
 	/* Set up stack. */
-	if (!setup_stack(if_)){
+	if (!setup_stack(if_))
+	{
 		dprintf("[LOAD] setup stack failed\n");
 		goto done;
-
 	}
 	dprintf("[LOAD] setup stack complete\n");
-	// pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/userprog/args-none:args-none --swap-disk=4 -- -q   -f run args-none 
+	// pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/userprog/args-none:args-none --swap-disk=4 -- -q   -f run args-none
 	/* Start address. */
 	if_->rip = ehdr.e_entry;
-	
+
 	success = true;
 	dprintf("[LOAD] load complete!\n");
 
@@ -843,36 +842,27 @@ install_page(void *upage, void *kpage, bool writable)
 static bool
 lazy_load_segment(struct page *page, void *aux)
 {
-	/* TODO: 파일에서 세그먼트를 읽어옵니다. */
-	/* TODO: 이 함수는 주소 VA에서 첫 페이지 폴트가 발생했을 때 호출됩니다. */
-	/* TODO: 이 함수를 호출할 때 VA를 사용할 수 있습니다. */
+	/* 파일에서 세그먼트를 읽어옵니다. */
+	/* 이 함수는 주소 VA에서 첫 페이지 폴트가 발생했을 때 호출됩니다. */
+	/* 이 함수를 호출할 때 VA를 사용할 수 있습니다. */
 	dprintfc("[lazy_load_segment] routine start. page: %p, page->va: %p\n", page, page->va);
-	void *va = page->va; // RAM에 없음. 따라서 프레임 할당 해줘야 함. 그리고 이떄! 그 프레임은 또 파일 정보가 없으니까, 파일에서 세그먼트를 읽어와야 합니다.
-						 // load_segment에서 파일에서 세그먼트 읽기 위한 정보 잘 설정해주고, 여기서***** 잘 까서 읽어주면 됨.
-						 // 읽을 때 필요한 정보가 뭐냐? 위에 참고하세요
+	void *va = page->va; 
+	
 	/* Load this page. */
 	struct lazy_aux *lazy_aux = (struct lazy_aux *)aux;
-	dprintfc("[lazy_load_segment] about to read file\n");
-	// if (file_read(lazy_aux->file, page->frame->kva, lazy_aux->read_bytes) != (int)lazy_aux->read_bytes) // 파일에서 세그먼트 읽어 옴.
-	// {
-	// 	dprintfc("[lazy_load_segment] file read failed\n");
-	// 	// palloc_free_page(page); // HACK: 페이지를 여기서 할당 해제해줘도 되나?
-	// 	return false;
-	// }
-
-	if (lazy_aux->read_bytes > 0) { // Only attempt to read if there are bytes to read
-		if (file_read_at(lazy_aux->file, page->frame->kva, lazy_aux->read_bytes, lazy_aux->ofs) != (int)lazy_aux->read_bytes) {
-			// Optional: consider how to handle read failure, e.g., return false
-			// For now, mirror existing error handling or lack thereof for file_read.
-			// Based on the previous code, a failed read would cause the outer load_segment to fail.
-			// Here, returning false will propagate up.
-			return false; 
+	
+	dprintfc("[lazy_load_segment] reading file\n");
+	if (lazy_aux->read_bytes > 0) // Only attempt to read if there are bytes to read
+	{ 
+		if (file_read_at(lazy_aux->file, page->frame->kva, lazy_aux->read_bytes, lazy_aux->ofs) != (int)lazy_aux->read_bytes)
+		{
+			return false;
 		}
 	}
 
 	dprintfc("[lazy_load_segment] file read complete\n");
-	memset(page->frame->kva + lazy_aux->read_bytes, 0, lazy_aux->zero_bytes); // zero bytes 설정.
-	dprintfc("[lazy_load_segment] zero bytes copied\n");
+	memset(page->frame->kva + lazy_aux->read_bytes, 0, lazy_aux->zero_bytes); // zero bytes 복사.
+	dprintfc("[lazy_load_segment] zero bytes copied. lazy load success\n");
 	return true;
 }
 
@@ -898,8 +888,9 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT(pg_ofs(upage) == 0);
 	ASSERT(ofs % PGSIZE == 0);
 
-	off_t current_segment_file_offset = ofs;
+	off_t current_segment_file_offset = ofs; // lazy_load_segment 수행 시 프레임에 읽어줄 파일의 오프셋을 관리.
 
+	file_seek(file, ofs); // 읽어야 하는 파일 구조체의 오프셋을 ofs 값으로 초기화.
 	while (read_bytes > 0 || zero_bytes > 0)
 	{
 		/* 이 페이지를 어떻게 채울지 계산합니다.
@@ -908,18 +899,22 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-		/* TODO: lazy_load_segment에 정보를 전달하기 위한 aux를 설정하세요. */
-		struct lazy_aux *aux = NULL; // 파일에서 세그먼트 읽어올 때 필요한 정보가 여기?
-		// 여기서 file, page_read_bytes, page_zero_bytes 설정?
-		// struct lazy_aux: file, page_read_bytes, page_zero_bytes
-		aux = malloc(sizeof(struct lazy_aux));
+		/* lazy_load_segment에 정보를 전달하기 위한 aux를 설정하세요. */
+		struct lazy_aux *aux = malloc(sizeof(struct lazy_aux)); // 파일에서 세그먼트 읽어올 때 필요한 정보가 여기 들어간다.
+
+		// aux 업데이트
 		aux->file = file;
 		aux->read_bytes = page_read_bytes;
 		aux->zero_bytes = page_zero_bytes;
 		aux->ofs = current_segment_file_offset;
+
+		// uninit page 생성.
+		// HACK: LLM은 VM_FILE을 써야 한다고 주장.
 		if (!vm_alloc_page_with_initializer(VM_ANON, upage,
-											writable, lazy_load_segment, aux)) // uninit 페이지를 만들고 익명 페이지로 초기화
+											writable, lazy_load_segment, aux)) // uninit 페이지를 만들고 익명 페이지로 쓰겠다고 예약
+		{
 			return false;
+		}
 
 		/* 다음 페이지로 이동합니다. */
 		read_bytes -= page_read_bytes;
@@ -935,43 +930,30 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 static bool
 setup_stack(struct intr_frame *if_)
 {
+	dprintf("[SETUP_STACK] routine start\n");
 	bool success = false;
 	void *stack_bottom = (void *)(((uint8_t *)USER_STACK) - PGSIZE); // 유저 프로세스의 가상 주소상의 stack bottom
-	dprintf("[SETUP_STACK] setup stack started\n");
+	
 	/* stack_bottom에 스택을 매핑한 뒤 즉시 페이지를 claim 하십시오.
-	* 성공하면 rsp 값을 적절히 설정합니다.
-	* 해당 페이지를 스택으로 표시해야 합니다. */
-	/* 여기에 코드 작성 */
-	// You might need to provide the way to identify the stack. 
-	// You can use the auxillary markers in vm_type of vm/vm.h 
+	 * 성공하면 rsp 값을 적절히 설정합니다.
+	 * 해당 페이지를 스택으로 표시해야 합니다. */
+	// You might need to provide the way to identify the stack.
+	// You can use the auxillary markers in vm_type of vm/vm.h
 	// (e.g. VM_MARKER_0) to mark the page.
-	struct hash_iterator hi;
-	hash_first(&hi, &thread_current()->spt.hash);
-	while(hi.elem){
-		struct page *tmp_page = hash_entry(hi.elem, struct page, hash_elem);
-		dprintf("[setup_stack] iterating spt hash. %p\n", tmp_page->va);
-		hash_next(&hi);
-	}
+	
 	dprintf("[SETUP_STACK] allocating stack bottom: %p\n", stack_bottom);
-	if (vm_alloc_page_with_initializer(VM_ANON, stack_bottom, true, anon_initializer, NULL)) // HACK: 마커 이렇게 쓰면 되는지 잘 모르겠음. 전반적으로 잘 모르겠음.
+	if (vm_alloc_page_with_initializer(VM_ANON | VM_MARKER_STACK, stack_bottom, true, anon_initializer, NULL)) // HACK: 전반적으로 잘 모르겠음.
 	{
-		// 여기서는 spt 덤프 시키면 페이지 하나 나와야 됨.
-		hash_first(&hi, &thread_current()->spt.hash);
-		while(hi.elem){
-			struct page *tmp_page = hash_entry(hi.elem, struct page, hash_elem);
-			dprintf("[setup_stack] iterating spt hash. %p\n", tmp_page->va);
-			hash_next(&hi);
-		}
 		dprintf("[SETUP_STACK] vm_alloc_page_with_initializer complete\n");
-		success = vm_claim_page(stack_bottom); // 바로 이 주소로 프레임을 할당.
+		success = vm_claim_page(stack_bottom); // stack_bottom 주소로 프레임을 할당.
 		if (success)
 		{
 			dprintf("[SETUP_STACK] page claimed\n");
 			if_->rsp = USER_STACK;
 		}
 	}
-	
-	dprintf("[SETUP_STACK] returning success or fail\n");
+
+	dprintf("[SETUP_STACK] returning success: %d\n", success);
 	return success;
 }
 
