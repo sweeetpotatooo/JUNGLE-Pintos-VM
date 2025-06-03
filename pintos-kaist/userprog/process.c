@@ -853,12 +853,23 @@ lazy_load_segment(struct page *page, void *aux)
 	/* Load this page. */
 	struct lazy_aux *lazy_aux = (struct lazy_aux *)aux;
 	dprintfc("[lazy_load_segment] about to read file\n");
-	if (file_read(lazy_aux->file, page->frame->kva, lazy_aux->read_bytes) != (int)lazy_aux->read_bytes) // 파일에서 세그먼트 읽어 옴.
-	{
-		dprintfc("[lazy_load_segment] file read failed\n");
-		// palloc_free_page(page); // HACK: 페이지를 여기서 할당 해제해줘도 되나?
-		return false;
+	// if (file_read(lazy_aux->file, page->frame->kva, lazy_aux->read_bytes) != (int)lazy_aux->read_bytes) // 파일에서 세그먼트 읽어 옴.
+	// {
+	// 	dprintfc("[lazy_load_segment] file read failed\n");
+	// 	// palloc_free_page(page); // HACK: 페이지를 여기서 할당 해제해줘도 되나?
+	// 	return false;
+	// }
+
+	if (lazy_aux->read_bytes > 0) { // Only attempt to read if there are bytes to read
+		if (file_read_at(lazy_aux->file, page->frame->kva, lazy_aux->read_bytes, lazy_aux->ofs) != (int)lazy_aux->read_bytes) {
+			// Optional: consider how to handle read failure, e.g., return false
+			// For now, mirror existing error handling or lack thereof for file_read.
+			// Based on the previous code, a failed read would cause the outer load_segment to fail.
+			// Here, returning false will propagate up.
+			return false; 
+		}
 	}
+
 	dprintfc("[lazy_load_segment] file read complete\n");
 	memset(page->frame->kva + lazy_aux->read_bytes, 0, lazy_aux->zero_bytes); // zero bytes 설정.
 	dprintfc("[lazy_load_segment] zero bytes copied\n");
@@ -883,9 +894,11 @@ static bool
 load_segment(struct file *file, off_t ofs, uint8_t *upage,
 			 uint32_t read_bytes, uint32_t zero_bytes, bool writable)
 {
-	ASSERT((read_bytes + zero_bytes) % PGSIZE == 0);₩
+	ASSERT((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT(pg_ofs(upage) == 0);
 	ASSERT(ofs % PGSIZE == 0);
+
+	off_t current_segment_file_offset = ofs;
 
 	while (read_bytes > 0 || zero_bytes > 0)
 	{
@@ -903,6 +916,7 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		aux->file = file;
 		aux->read_bytes = page_read_bytes;
 		aux->zero_bytes = page_zero_bytes;
+		aux->ofs = current_segment_file_offset;
 		if (!vm_alloc_page_with_initializer(VM_ANON, upage,
 											writable, lazy_load_segment, aux)) // uninit 페이지를 만들고 익명 페이지로 초기화
 			return false;
@@ -910,6 +924,7 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		/* 다음 페이지로 이동합니다. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
+		current_segment_file_offset += page_read_bytes;
 		upage += PGSIZE;
 	}
 	return true;

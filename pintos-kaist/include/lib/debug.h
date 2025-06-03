@@ -61,7 +61,7 @@ void debug_backtrace (void);
 #define dprintfb(...) ((void)0)
 #endif
 ////////////////////////
-#define DEBUG_PRINTC
+//#define DEBUG_PRINTC
 
 #ifdef DEBUG_PRINTC
 #define dprintfc(...) printf(__VA_ARGS__)
