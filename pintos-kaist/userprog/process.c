@@ -248,6 +248,8 @@ static void __do_fork(void *aux)
 	process_activate(current);
 #ifdef VM
 	supplemental_page_table_init(&current->spt);
+	dprintfe("[__do_fork] current->spt: %p\n", &current->spt);
+	dprintfe("[__do_fork] parent->spt: %p\n", &parent->spt);
 	if (!supplemental_page_table_copy(&current->spt, &parent->spt))
 		goto error;
 #else

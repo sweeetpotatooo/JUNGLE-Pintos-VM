@@ -10,6 +10,16 @@
 #include "vm/uninit.h"
 #include "lib/kernel/hash.h"
 #include "userprog/process.h"
+#include <string.h>
+#include "filesys/file.h"
+
+struct lazy_load_args
+{
+	struct file *file;
+	off_t ofs;
+	size_t page_read_bytes;
+	size_t zero_bytes;
+};
 
 /* 가상 메모리 서브시스템을 초기화합니다.
  * 각 서브시스템의 초기화 코드를 호출합니다. */
@@ -358,7 +368,9 @@ bool vm_claim_page(void *va)
 static bool
 vm_do_claim_page(struct page *page)
 {
-	ASSERT(page != NULL);
+	if(page == NULL) {
+		return false;
+	}
 	dprintfc("[vm_do_claim_page] routine start. page->va: %p\n", page->va);
 
 	struct frame *frame = vm_get_frame(); // 메모리 공간에서 프레임 하나 확보
@@ -403,43 +415,113 @@ void supplemental_page_table_init(struct supplemental_page_table *spt UNUSED)
 	hash_init(&spt->hash, page_hash, page_less, NULL);
 }
 
+// Helper function to destroy a page during cleanup
+static void
+spt_destroy_page_in_copy_failure(struct hash_elem *e, void *aux UNUSED)
+{
+	struct page *p = hash_entry(e, struct page, hash_elem);
+	vm_dealloc_page(p);
+}
+
 /* src에서 dst로 supplemental page table을 복사합니다. */
 // - `src`의 supplemental page table을 `dst`에 복사
 // - fork 시 부모의 실행 컨텍스트를 자식에게 복사할 때 사용
 // - 각 페이지를 순회하며 `uninit_page`로 생성하고 **즉시 claim 처리**해야 함
 // TODO: 구현 하다 말았음.
-bool supplemental_page_table_copy(struct supplemental_page_table *dst,
-								  struct supplemental_page_table *src)
-{
-	ASSERT(src != NULL); // 포인터 유효성 검사
-	ASSERT(dst != NULL);
-	dprintfe("[supplemental_page_table_copy] routine start\n");
+// bool supplemental_page_table_copy(struct supplemental_page_table *dst,
+// 								  struct supplemental_page_table *src)
+// {
+// 	ASSERT(src != NULL); // 포인터 유효성 검사
+// 	ASSERT(dst != NULL);
+// 	dprintfe("[supplemental_page_table_copy] routine start\n");
+// 	struct hash_iterator hi;	 // 이터레이터 선언
+// 	hash_first(&hi, &src->hash); // 이터레이터 초기화
 
-	struct hash_iterator hi;			// 이터레이터 선언
-	struct hash *src_hash = &src->hash; // source hash 포인터 지정
+// 	while (hash_next(&hi)) // 각 페이지를 순회하는 루프.
+// 	{
+// 		struct page *src_page = hash_entry(hash_cur(&hi), struct page, hash_elem);
+// 		void *new_aux_ptr = NULL;
 
-	hash_first(&hi, src_hash); // 이터레이터 초기화
-	while (hash_next(&hi))	   // 각 페이지를 순회하는 루프.
-	{
-		struct page *src_page = hash_entry(hash_cur(&hi), struct page, hash_elem); // 해쉬 요소로부터 페이지 구조체 추출
-		struct page *dst_page;													   // 목적지 페이지 포인터 선언
-		enum vm_type type = page_get_type(src_page);
-		void *aux = NULL;
-		if (type == VM_ANON)
-		{
-			struct lazy_aux *src_aux = src_page->uninit.aux;
-			struct lazy_aux *new_aux = malloc(sizeof(struct lazy_aux));
-			aux = new_aux;
-		}
-		dprintfe("[supplemental_page_table_copy] src page va: %p\n", src_page->va);
+// 		enum vm_type type_for_uninit_new = page_get_type(src_page); // 타입 획득.
+// 		vm_initializer *init_func = src_page->uninit.init;			// uninit.init 함수(e.g. lazy_load)
 
-		vm_alloc_page_with_initializer(type, src_page->va, src_page->writable, NULL, aux); // source를 기준으로 페이지 메타 데이터 생성
+// 		if (src_page->uninit.aux != NULL) // init 함수를 위한 aux(매개변수 등)가 존재할 경우 그걸 카피 해줘야 해요.
+// 		{
+// 			if (VM_TYPE(type_for_uninit_new) == VM_FILE ||						// 타입이 file backed page 이거나 anonymous일 경우 초기화 함수가 존재한다면
+// 				(VM_TYPE(type_for_uninit_new) == VM_ANON && init_func != NULL)) // lazy load 같은 함수가 있을 경우. -> 왜 하는지 모르겠음.
+// 			{
 
-		vm_claim_page(src_page->va);	// src_page의 가상 주소를 가지고 현재 쓰레드의 spt에서 페이지를 찾아서 프레임을 할당해준다.
-		spt_insert_page(dst, src_page); // 목적지 spt에 src page 삽입해준다.
-	}
-	return true;
+// 				struct lazy_load_args *src_load_args = (struct lazy_load_args *)src_page->uninit.aux; // src 페이지가 가지고 있는 lazy_laod aux 포인터를 복사.
+// 				new_aux_ptr = malloc(sizeof(struct lazy_load_args));								  // 실제 aux 데이터를 저장할 커널 공간 할당.
+// 				if (new_aux_ptr == NULL)															  // 할당 실패 예외처리.
+// 				{
+// 					goto error_cleanup;
+// 				}
+// 				memcpy(new_aux_ptr, src_load_args, sizeof(struct lazy_load_args)); // 기존 aux에서 새 aux로 커널 메모리를 복사.
+
+// 				if (src_load_args->file != NULL) // 만약 파일이 존재할 경우 파일 복사를 해야함. (파일 포인터 자체는 위에서 복사가 돼 있음. memcpy할 때.)
+// 				{
+// 					((struct lazy_load_args *)new_aux_ptr)->file = file_duplicate(src_load_args->file); // file_duplicate를 따로 써야 함.
+
+// 					if (((struct lazy_load_args *)new_aux_ptr)->file == NULL) // 파일 복사 실패 예외 처리
+// 					{
+// 						free(new_aux_ptr);
+// 						new_aux_ptr = NULL;
+// 						goto error_cleanup;
+// 					}
+// 				}
+// 			}
+// 		}
+// 		// with_initializer로 바꾸기
+// 		vm_alloc_page_with_initializer(type_for_uninit_new, src_page->va, src_page->writable, init_func, new_aux_ptr);
+// 		struct page *child_page = spt_find_page(&thread_current()->spt, src_page->va);
+
+// 		// 부모 페이지의 writable 복사
+// 		child_page->writable = src_page->writable; // ?
+
+// 		// 목적지 보조 페이지 테이블에 자식 페이지 삽입
+// 		spt_insert_page(dst, child_page);
+// 		vm_do_claim_page(child_page);
+// 		memcpy(child_page->frame->kva, src_page->frame->kva, PGSIZE);
+// 	}
+// 	return true;
+
+// error_cleanup:
+// 	hash_destroy(&dst->hash, spt_destroy_page_in_copy_failure);
+// 	hash_init(&dst->hash, page_hash, page_less, NULL);
+// 	return false;
+// }
+bool
+supplemental_page_table_copy(struct supplemental_page_table *dst,
+                             struct supplemental_page_table *src) {
+    struct hash_iterator i;
+    hash_first(&i, &src->hash);
+
+    while (hash_next(&i)) {
+        struct page *src_page = hash_entry(hash_cur(&i), struct page, hash_elem);
+        enum vm_type type = page_get_type(src_page);
+        void *upage = src_page->va;
+
+        // 1. 새로운 페이지를 dst SPT에 할당
+        if (!vm_alloc_page_with_initializer(type, upage, src_page->writable,
+                                            src_page->uninit.init, src_page->uninit.aux)) {
+            return false;
+        }
+
+        // 2. 새로 할당된 페이지를 찾고 claim
+        struct page *dst_page = spt_find_page(dst, upage);
+        if (!vm_claim_page(upage)) {
+            return false;
+        }
+
+        // 3. 부모의 프레임이 존재하면, 자식의 프레임으로 데이터 복사
+        if (src_page->frame != NULL) {
+            memcpy(dst_page->frame->kva, src_page->frame->kva, PGSIZE);
+        }
+    }
+    return true;
 }
+
 
 /* supplemental page table이 가지고 있는 리소스를 해제합니다. */
 void supplemental_page_table_kill(struct supplemental_page_table *spt)

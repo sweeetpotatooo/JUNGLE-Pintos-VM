@@ -151,6 +151,9 @@ page_fault (struct intr_frame *f) {
 		dprintfc("[page_fault] vm_try_handle_fault 성공\n");
 		return;
 	}
+	else{
+		exit(-1);
+	}
 	// 여기로 넘어오면 망했다는 거임.
 		
 #endif
