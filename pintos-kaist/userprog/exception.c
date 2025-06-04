@@ -128,7 +128,7 @@ page_fault (struct intr_frame *f) {
 	   data.  It is not necessarily the address of the instruction
 	   that caused the fault (that's f->rip). */
 
-	fault_addr = (void *) rcr2();
+	fault_addr = (void *) rcr2(); // 폴트 난 주소를 레지스터에서 획득.
 
 	/* Turn interrupts back on (they were only off so that we could
 	   be assured of reading CR2 before it changed). */
@@ -141,13 +141,21 @@ page_fault (struct intr_frame *f) {
 	user = (f->error_code & PF_U) != 0;
 
 	// project 2. user programs: bad ~
-	exit(-1);
+	// exit(-1);
 	// ~ project 2. user programs: bad
 
 #ifdef VM
 	/* For project 3 and later. */
-	if (vm_try_handle_fault (f, fault_addr, user, write, not_present))
+	if (vm_try_handle_fault (f, fault_addr, user, write, not_present)) // 그 주소를 폴트 핸들러로 그대로 넘겨줌
+	{
+		dprintfc("[page_fault] vm_try_handle_fault 성공\n");
 		return;
+	}
+	else{
+		exit(-1);
+	}
+	// 여기로 넘어오면 망했다는 거임.
+		
 #endif
 
 	/* Count page faults. */

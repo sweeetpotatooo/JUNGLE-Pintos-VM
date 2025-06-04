@@ -21,8 +21,9 @@ enum vm_type {
 
 	/* 추가적인(보조) 비트 플래그.
 	   int 범위 안에서 값만 겹치지 않도록 원하는 만큼 확장할 수 있다. */
-	VM_MARKER_0 = (1 << 3),
+	VM_MARKER_0 = (1 << 3), // VM_MARKER 
 	VM_MARKER_1 = (1 << 4),
+	VM_MARKER_STACK = (1 << 5),
 
 	/* 이 값보다 큰 비트를 사용하지 말 것. */
 	VM_MARKER_END = (1 << 31),
@@ -49,7 +50,7 @@ struct thread;
    "자식 클래스"를 포함한다.
 
    ★ 미리 정의된 멤버는 삭제/수정하지 말 것! */
-struct page {
+struct page { // page 메타 데이터고 va가 실제 할당된 페이지 주소를 표현할 뿐
 	const struct page_operations *operations; /* 페이지 연산 테이블 */
 	void *va;              /* 사용자 공간 기준 가상 주소 */
 	struct frame *frame;   /* 대응되는 물리 프레임에 대한 역참조 */
@@ -133,5 +134,6 @@ bool vm_alloc_page_with_initializer (enum vm_type type, void *upage,
 void vm_dealloc_page (struct page *page);
 bool vm_claim_page (void *va);
 enum vm_type page_get_type (struct page *page);
-
+void spt_destructor(struct hash_elem *he);
+uint64_t page_hash(const struct hash_elem *e, void *aux);
 #endif  /* VM_VM_H */

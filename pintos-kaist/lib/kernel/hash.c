@@ -8,6 +8,7 @@
 #include "hash.h"
 #include "../debug.h"
 #include "threads/malloc.h"
+#include "vm/vm.h"
 
 #define list_elem_to_hash_elem(LIST_ELEM)                       \
 	list_entry(LIST_ELEM, struct hash_elem, list_elem)
@@ -275,7 +276,6 @@ uint64_t
 hash_int (int i) {
 	return hash_bytes (&i, sizeof i);
 }
-
 /* Returns the bucket in H that E belongs in. */
 static struct list *
 find_bucket (struct hash *h, struct hash_elem *e) {
@@ -288,12 +288,16 @@ find_bucket (struct hash *h, struct hash_elem *e) {
 static struct hash_elem *
 find_elem (struct hash *h, struct list *bucket, struct hash_elem *e) {
 	struct list_elem *i;
+	dprintfb("[find_elem] finding hash elem\n");
 
 	for (i = list_begin (bucket); i != list_end (bucket); i = list_next (i)) {
 		struct hash_elem *hi = list_elem_to_hash_elem (i);
-		if (!h->less (hi, e, h->aux) && !h->less (e, hi, h->aux))
+		if (!h->less (hi, e, h->aux) && !h->less (e, hi, h->aux)){
+			dprintfb("[find_elem] hash found. %p\n", hash_entry(hi, struct page, hash_elem));
 			return hi;
+		}
 	}
+	dprintfb("[find_elem] hash not found\n");
 	return NULL;
 }
 

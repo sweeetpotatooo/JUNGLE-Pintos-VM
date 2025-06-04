@@ -31,6 +31,7 @@ file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 /* Swap in the page by read contents from the file. */
 static bool
 file_backed_swap_in (struct page *page, void *kva) {
+	PANIC("filebacked swap in"); // 분명히 호출히 호출돼야 하잖아. 
 	struct file_page *file_page UNUSED = &page->file;
 }
 

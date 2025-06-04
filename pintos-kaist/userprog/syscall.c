@@ -34,7 +34,7 @@ void check_address(const uint64_t *addr);
 
 #define PAL_ZERO 0
 
-
+// TODO: 주소 체크 방식 추가. 지금은 모르겠음
 /**
  * 주소값이 유저 영역(<0x8004000000)내인지를 검증
  * 
@@ -42,8 +42,12 @@ void check_address(const uint64_t *addr);
  */
 void check_address(const uint64_t *addr){
 	struct thread *cur = thread_current();
-	if (addr == NULL || !(is_user_vaddr(addr)) || pml4_get_page(cur->pml4, addr) == NULL) 
+	dprintfe("[check_address] routine start\n");
+	if (addr == NULL || !(is_user_vaddr(addr)) ||!spt_find_page(&cur->spt, addr)) 
 		exit(-1);
+	if(pml4_get_page(cur->pml4, addr) == NULL) dprintfe("[check_address] addr not in pml4\n");
+	dprintfe("[check_address] check pass!\n");
+
 }
 
 /**
@@ -228,6 +232,7 @@ int filesize(int fd) {
  */
 int read(int fd, void *buffer, unsigned size){
 	// 1. 주소 범위 검증
+	dprintfe("[read] routine start. \n");
 	check_address(buffer);
     check_address(buffer + size-1); 
     if (size == 0)
