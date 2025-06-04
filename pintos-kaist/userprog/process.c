@@ -944,7 +944,7 @@ setup_stack(struct intr_frame *if_)
 	// (e.g. VM_MARKER_0) to mark the page.
 	
 	dprintf("[SETUP_STACK] allocating stack bottom: %p\n", stack_bottom);
-	if (vm_alloc_page_with_initializer(VM_ANON | VM_MARKER_STACK, stack_bottom, true, anon_initializer, NULL)) // HACK: 전반적으로 잘 모르겠음.
+	if (vm_alloc_page_with_initializer(VM_ANON | VM_MARKER_STACK, stack_bottom, true, NULL, NULL)) // HACK: 전반적으로 잘 모르겠음.
 	{
 		dprintf("[SETUP_STACK] vm_alloc_page_with_initializer complete\n");
 		success = vm_claim_page(stack_bottom); // stack_bottom 주소로 프레임을 할당.

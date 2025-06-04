@@ -9,9 +9,18 @@ enum vm_type;
 struct file_page {
 };
 
+struct lazy_aux_file_backed {
+	size_t length;
+	int writable;
+	struct file *file;
+	off_t offset;
+};
+
 void vm_file_init (void);
 bool file_backed_initializer (struct page *page, enum vm_type type, void *kva);
 void *do_mmap(void *addr, size_t length, int writable,
 		struct file *file, off_t offset);
+bool lazy_load_file_backed(struct page *page, void *aux);
+
 void do_munmap (void *va);
 #endif
