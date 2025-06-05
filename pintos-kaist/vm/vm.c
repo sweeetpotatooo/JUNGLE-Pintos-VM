@@ -260,12 +260,16 @@ vm_stack_growth(void *addr)
 {
         /* Allocate a new anonymous stack page at the given address. */
         void *addr_aligned = pg_round_down(addr);
-        /* Create an uninitialised page marked as stack. */
+
         if (vm_alloc_page_with_initializer(VM_ANON | VM_MARKER_STACK,
                                            addr_aligned, true, NULL, NULL))
         {
                 /* Immediately claim the page so that it becomes usable. */
                 vm_claim_page(addr_aligned);
+
+                /* Track the lowest stack address allocated so far. */
+                if (addr_aligned < thread_current()->rsp)
+                        thread_current()->rsp = addr_aligned;
         }
 }
 
