@@ -45,3 +45,4 @@ core.*
 *.swo
 .vscode/
 .vscode/*
+pintos-kaist/include/lib/debug.h
