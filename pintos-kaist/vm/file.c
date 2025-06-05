@@ -89,23 +89,26 @@ file_backed_destroy(struct page *page)
 void *
 do_mmap(void *addr, size_t length, int writable, struct file *file, off_t offset)
 {
-	// bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writable, vm_initializer *init, void *aux)
-	struct lazy_aux_file_backed *aux;
 
-	while (length > 0)
+	dprintff("[do_mmap] routine start\n");
+	struct lazy_aux_file_backed *aux; // 자세한 설명은 구조체 참조
+	
+	while (length > 0) // length 값이 남아 있는 동안
 	{
-		aux = malloc(sizeof(struct lazy_aux_file_backed));
-		aux->file = file_reopen(file);
-		aux->writable = writable;
-
-		if (length > PGSIZE)
-			aux->length = PGSIZE;
-		else
-			aux->length = length;
-
+		dprintff("[do_mmap] loop\n");
+		aux = malloc(sizeof(struct lazy_aux_file_backed)); // aux 값을 저장할 버퍼를 커널 메모리 풀에 할당
+		aux->file = file_reopen(file); // 각 페이지가 하나의 파일을 참조해야 하므로 참조 카운트를 유지하기 위해 file_reopen 사용
+		aux->writable = writable; 
+		
+		if (length > PGSIZE) // 만약 파일로부터 복사해야 하는 바이트 수가 PGSIZE 이상이라면 
+		aux->length = PGSIZE; // PGSIZE와 동일한 값으로 설정.
+		else // 그 이하라면
+		aux->length = length; // 주어진 length만큼 복사.
+		
 		aux->offset = offset;
-
-		if (!vm_alloc_page_with_initializer(VM_FILE, addr, writable, lazy_load_file_backed, aux))
+		
+		dprintff("[do_mmap] allocating page with initializer\n");
+		if (!vm_alloc_page_with_initializer(VM_FILE, addr, writable, lazy_load_file_backed, aux)) // 페이지 할당.
 		{
 			free(aux);
 			return NULL;
@@ -113,14 +116,10 @@ do_mmap(void *addr, size_t length, int writable, struct file *file, off_t offset
 		// 쓴 만큼 offset, length 업데이트.
 		offset += aux->length;
 		length -= aux->length;
-		// addr = (void *)((char *) addr +  PGSIZE);
+		addr -= PGSIZE;
 	}
 
-	// 1. addr로부터 페이지 생성
-	// 1-1. lazy_load, aux 초기화해서 넘겨주기.
-	// 1-2. 복사(length, offset, 등등) 이거 바로 해줘요? 그럼 또 lazy 아니잖아. -> 이 내용이 lazy_load에서 타입 체크후에 복사 바로 하면 되지 않겠나.
-	// 1-3. 나머자 내용은 0으로 채워야 함.
-
+	// 이대로 리턴하면 가장 아래의 addr 값을 리턴하지 않나? 여러 페이지가 할당됐을 텐데.
 	return addr;
 }
 
@@ -129,7 +128,7 @@ bool lazy_load_file_backed(struct page *page, void *aux)
 	/* 파일에서 페이지 컨텐츠를 읽어옵니다. */
 	/* 이 함수는 주소 VA에서 첫 페이지 폴트가 발생했을 때 호출됩니다. */
 	/* 이 함수를 호출할 때 VA를 사용할 수 있습니다. */
-	dprintfd("[lazy_load_file_backed] routine start. page: %p, page->va: %p\n", page, page->va);
+	dprintff("[lazy_load_file_backed] routine start. page: %p, page->va: %p\n", page, page->va);
 	void *va = page->va;
 	memset(page->frame->kva, 0, PGSIZE); // zero bytes 복사.
 
@@ -142,7 +141,7 @@ bool lazy_load_file_backed(struct page *page, void *aux)
 	file_page->file_ofs = lazy_aux->offset; // 
 	file_page->size = lazy_aux->length;
 	
-	dprintfd("[lazy_load_file_backed] reading file\n");
+	dprintff("[lazy_load_file_backed] reading file\n");
 	if (file_read_at(lazy_aux->file, page->frame->kva, lazy_aux->length, lazy_aux->offset) != (int)lazy_aux->length)
 	{
 		free(lazy_aux);

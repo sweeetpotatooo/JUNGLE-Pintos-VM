@@ -46,3 +46,4 @@ core.*
 .vscode/
 .vscode/*
 pintos-kaist/include/lib/debug.h
+pintos-kaist/vm/log.txt
