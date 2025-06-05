@@ -20,9 +20,12 @@ static const struct page_operations anon_ops = {
 /* 익명 페이지를 위한 데이터를 초기화합니다 */
 void vm_anon_init(void)
 {
+
+    // TODO: swap 구현 시 아래 내용을 추가해야 함. 사유는 그때 가서 이해하기.
     /* swap_disk를 설정하세요. */
-    swap_disk = NULL;
-    swap_disk = disk_get(1, 1); // HACK: disk_get 인자값을 잘 모르겠음. 
+    // swap_disk = disk_get(1, 1); // NOTE: disk_get 인자값 적절성 검토 완료. 
+    // size_t swap_size = disk_size(swap_disk) / SECTORS_PER_PAGE;
+    // swap_table = bitmap_create(swap_size);
 }
 
 // “이 함수는 먼저 page->operations에서 익명 페이지에 대한 핸들러를 설정합니다. 현재 빈 구조체인 anon_page에서

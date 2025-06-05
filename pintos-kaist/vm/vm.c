@@ -258,15 +258,10 @@ vm_get_frame(void)
 static void
 vm_stack_growth(void *addr)
 {
-	// HACK: thread_current()->rsp 는 건들지도 않았는데 구현 됨. 이거 왜 하라는 거임?
-	void *addr_aligned = pg_round_down(addr);
-	dprintfc("[vm_stack_growth] routine start\n");
-	bool result = vm_alloc_page_with_initializer(VM_ANON | VM_MARKER_STACK, addr_aligned, true, NULL, NULL);
-	
-	dprintff("[vm_stack_growth] vm_alloc complete. result: %d. stack address: %p\n", result, addr_aligned);
-	/* 
-	* DEBUG: 스택이 한방에 밑으로 자라날 때 처리가 안 되는 중.
-	*/
+	dprintff("[vm_stack_growth] routine start\n");
+	bool result = vm_alloc_page_with_initializer(VM_ANON | VM_MARKER_STACK, addr, true, NULL, NULL);
+	vm_claim_page(addr);
+	dprintff("[vm_stack_growth] vm_alloc complete. result: %d. stack address: %p\n", result, addr);
 }
 
 /* 쓰기 보호된 페이지에 대한 예외를 처리합니다. */
@@ -342,24 +337,26 @@ bool vm_try_handle_fault(struct intr_frame *f, void *addr,
 	struct page *page;
 
 	dprintfc("[vm_try_handle_fault] checking f->rsp: %p\n", f->rsp);
-	
+
 	void *rsp = is_kernel_vaddr(f->rsp) ? thread_current()->rsp : f->rsp;
 
 	/* DEBUG: 기존 스택 성장 조건은 아래와 같았음.
-	* `if (f->rsp - 8 == addr)`
-	* 차이점: f->rsp가 페이지 폴트 발생 위치보다 위에 있을 경우를 고려하지 않았음.
-	* 문제가 된 이유: 
-	* 왜 stack이 역성장을 하는걸까?
-	*/
+	 * `if (f->rsp - 8 == addr)`
+	 * 차이점: f->rsp가 페이지 폴트 발생 위치보다 위에 있을 경우를 고려하지 않았음.
+	 */
 
-	if (addr <= rsp && addr < USER_STACK && addr >= STACK_MAX) // 합법적인 스택 확장 요청인지 판단. user stack의 최대 크기인 1MB를 초과하지 않는지 check
+	if (addr >= rsp - 8 && addr < USER_STACK && addr >= STACK_MAX) // 합법적인 스택 확장 요청인지 판단. user stack의 최대 크기인 1MB를 초과하지 않는지 check
 	{
-		dprintfc("[vm_try_handle_fault] expending stack page\n");
-		vm_stack_growth(addr);
+		dprintff("[vm_try_handle_fault] expending stack page\n");
+		vm_stack_growth(pg_round_down(addr));
+		return true;
 	}
+	else
+	{
 
-	page = spt_find_page(spt, addr); // page를 null로 설정해. stack growth 경우에는 spt 찾을 필요 없지 않나? 어차피 없을텐데.
-	return vm_do_claim_page(page);	 // 그 페이지에 대응하는 프레임을 할당받아.
+		page = spt_find_page(spt, addr); // page를 null로 설정해. stack growth 경우에는 spt 찾을 필요 없지 않나? 어차피 없을텐데.
+		return vm_do_claim_page(page);	 // 그 페이지에 대응하는 프레임을 할당받아.
+	}
 }
 
 /* 페이지를 해제합니다.
@@ -458,74 +455,6 @@ spt_destroy_page_in_copy_failure(struct hash_elem *e, void *aux UNUSED)
 	vm_dealloc_page(p);
 }
 
-/* src에서 dst로 supplemental page table을 복사합니다. */
-// - `src`의 supplemental page table을 `dst`에 복사
-// - fork 시 부모의 실행 컨텍스트를 자식에게 복사할 때 사용
-// - 각 페이지를 순회하며 `uninit_page`로 생성하고 **즉시 claim 처리**해야 함
-// TODO: 구현 하다 말았음.
-// bool supplemental_page_table_copy(struct supplemental_page_table *dst,
-// 								  struct supplemental_page_table *src)
-// {
-// 	ASSERT(src != NULL); // 포인터 유효성 검사
-// 	ASSERT(dst != NULL);
-// 	dprintfe("[supplemental_page_table_copy] routine start\n");
-// 	struct hash_iterator hi;	 // 이터레이터 선언
-// 	hash_first(&hi, &src->hash); // 이터레이터 초기화
-
-// 	while (hash_next(&hi)) // 각 페이지를 순회하는 루프.
-// 	{
-// 		struct page *src_page = hash_entry(hash_cur(&hi), struct page, hash_elem);
-// 		void *new_aux_ptr = NULL;
-
-// 		enum vm_type type_for_uninit_new = page_get_type(src_page); // 타입 획득.
-// 		vm_initializer *init_func = src_page->uninit.init;			// uninit.init 함수(e.g. lazy_load)
-
-// 		if (src_page->uninit.aux != NULL) // init 함수를 위한 aux(매개변수 등)가 존재할 경우 그걸 카피 해줘야 해요.
-// 		{
-// 			if (VM_TYPE(type_for_uninit_new) == VM_FILE ||						// 타입이 file backed page 이거나 anonymous일 경우 초기화 함수가 존재한다면
-// 				(VM_TYPE(type_for_uninit_new) == VM_ANON && init_func != NULL)) // lazy load 같은 함수가 있을 경우. -> 왜 하는지 모르겠음.
-// 			{
-
-// 				struct lazy_load_args *src_load_args = (struct lazy_load_args *)src_page->uninit.aux; // src 페이지가 가지고 있는 lazy_laod aux 포인터를 복사.
-// 				new_aux_ptr = malloc(sizeof(struct lazy_load_args));								  // 실제 aux 데이터를 저장할 커널 공간 할당.
-// 				if (new_aux_ptr == NULL)															  // 할당 실패 예외처리.
-// 				{
-// 					goto error_cleanup;
-// 				}
-// 				memcpy(new_aux_ptr, src_load_args, sizeof(struct lazy_load_args)); // 기존 aux에서 새 aux로 커널 메모리를 복사.
-
-// 				if (src_load_args->file != NULL) // 만약 파일이 존재할 경우 파일 복사를 해야함. (파일 포인터 자체는 위에서 복사가 돼 있음. memcpy할 때.)
-// 				{
-// 					((struct lazy_load_args *)new_aux_ptr)->file = file_duplicate(src_load_args->file); // file_duplicate를 따로 써야 함.
-
-// 					if (((struct lazy_load_args *)new_aux_ptr)->file == NULL) // 파일 복사 실패 예외 처리
-// 					{
-// 						free(new_aux_ptr);
-// 						new_aux_ptr = NULL;
-// 						goto error_cleanup;
-// 					}
-// 				}
-// 			}
-// 		}
-// 		// with_initializer로 바꾸기
-// 		vm_alloc_page_with_initializer(type_for_uninit_new, src_page->va, src_page->writable, init_func, new_aux_ptr);
-// 		struct page *child_page = spt_find_page(&thread_current()->spt, src_page->va);
-
-// 		// 부모 페이지의 writable 복사
-// 		child_page->writable = src_page->writable; // ?
-
-// 		// 목적지 보조 페이지 테이블에 자식 페이지 삽입
-// 		spt_insert_page(dst, child_page);
-// 		vm_do_claim_page(child_page);
-// 		memcpy(child_page->frame->kva, src_page->frame->kva, PGSIZE);
-// 	}
-// 	return true;
-
-// error_cleanup:
-// 	hash_destroy(&dst->hash, spt_destroy_page_in_copy_failure);
-// 	hash_init(&dst->hash, page_hash, page_less, NULL);
-// 	return false;
-// }
 bool supplemental_page_table_copy(struct supplemental_page_table *dst,
 								  struct supplemental_page_table *src)
 {
