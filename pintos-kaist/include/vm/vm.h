@@ -3,6 +3,10 @@
 #include <stdbool.h>
 #include <hash.h>
 #include "threads/palloc.h"
+#include "threads/vaddr.h"
+
+/* Maximum size of user stack is 1 MB. */
+#define STACK_HEURISTIC 8
 
 /* ─────────────────────────────────────────────
    가상 페이지의 종류(enum vm_type)

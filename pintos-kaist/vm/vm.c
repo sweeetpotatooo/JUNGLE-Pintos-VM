@@ -71,7 +71,7 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writabl
 {
 
 	ASSERT(VM_TYPE(type) != VM_UNINIT) // DEBUG: 여기서 걸림. 주어진 타입으로 uninit_page를 바꿔줘야 되는 함수. uninit으로 uninit을 만들라는 이상한 명령인지 검사.
-	dprintfa("[vm_alloc_page_with_initializer] routine start. upage %p\n", upage);
+	// removed debug;
 
 	struct supplemental_page_table *spt = &thread_current()->spt;
 
@@ -80,7 +80,7 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writabl
 
 	if (spt_find_page(spt, upage) == NULL) // 페이지가 존재하지 않는다면
 	{
-		dprintfa("[vm_alloc_page_with_initializer] upage not found in spt\n");
+		// debug removed;
 		/*
 		 * NOTE:  페이지 메타데이터는 프로세스 생명주기와 독립적으로 관리되어야 함. 따라서 함수의 생명 주기에 종속된 스택 변수 대신
 		 * 별도의 메모리 공간에 메타 데이터를 저장해야 함. 이렇게 활용하기 위해 메모리에 커널 풀 영역이 있음.
@@ -91,7 +91,7 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writabl
 			return false;
 		}
 
-		dprintfa("[vm_alloc_page_with_initializer] page allocated\n");
+		// debug removed;
 
 		/* 페이지를 생성. uninit_new에 page 주소와 va(upage) 값을 넘겨주면 알아서 초기화해준다.
 		 * VM 타입에 맞는 초기화 함수를 가져와서,
@@ -104,19 +104,19 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writabl
 		switch (VM_TYPE(type))
 		{
 		case (VM_ANON):
-			dprintfa("[vm_alloc_page_with_initializer] uninit_new for VM_anon \n");
+			// debug removed;
 			initializer = anon_initializer;
 			break;
 		case (VM_FILE):
 			initializer = file_backed_initializer;
-			dprintfa("[vm_alloc_page_with_initializer] uninit_new for VM_file\n");
+			// debug removed;
 			break;
 		};
 
 		uninit_new(page, upage, init, type, aux, initializer);
 		page->writable = writable;
 
-		dprintfa("[vm_alloc_page_with_initializer] inserting page into spt\n");
+		// debug removed;
 
 		/* 생성한 페이지를 spt에 삽입하세요. */
 		return spt_insert_page(spt, page);
@@ -130,7 +130,7 @@ err:
 struct page *
 spt_find_page(struct supplemental_page_table *spt, void *va)
 {
-	dprintfa("[spt_find_page] routine start. va: %p\n", va);
+	// debug removed;
 	struct page *page = NULL;
 
 	/*
@@ -149,12 +149,12 @@ spt_find_page(struct supplemental_page_table *spt, void *va)
 
 	if (e != NULL)
 	{
-		dprintfa("[spt_find_page] search success.\n");
+		// debug removed;
 		return hash_entry(e, struct page, hash_elem);
 	}
 	else
 	{
-		dprintfa("[spt_find_page] search failed.\n");
+		// debug removed;
 		return NULL;
 	}
 }
@@ -164,21 +164,21 @@ bool spt_insert_page(struct supplemental_page_table *spt,
 					 struct page *page)
 {
 	int succ = false;
-	dprintfa("[spt_insert_page] routine started. va of inserting page: %p\n", page->va);
+	// debug removed;
 	if (spt == NULL || page == NULL)
 	{
-		dprintfa("[spt_insert_page] validation failed\n");
+		// debug removed;
 		return false;
 	}
 
 	if (hash_insert(&spt->hash, &page->hash_elem) == NULL) // null이면 삽입 성공
 	{
-		dprintfa("[spt_insert_page] insert success\n");
+		// debug removed;
 		succ = true;
 	}
 	else
 	{
-		dprintfa("[spt_insert_page] insert failed\n");
+		// debug removed;
 		succ = false;
 	}
 	return succ;
@@ -258,15 +258,15 @@ vm_get_frame(void)
 static void
 vm_stack_growth(void *addr)
 {
-	// HACK: thread_current()->rsp 는 건들지도 않았는데 구현 됨. 이거 왜 하라는 거임?
-	void *addr_aligned = pg_round_down(addr);
-	dprintfc("[vm_stack_growth] routine start\n");
-	bool result = vm_alloc_page_with_initializer(VM_ANON | VM_MARKER_STACK, addr_aligned, true, NULL, NULL);
-	
-	dprintff("[vm_stack_growth] vm_alloc complete. result: %d. stack address: %p\n", result, addr_aligned);
-	/* 
-	* DEBUG: 스택이 한방에 밑으로 자라날 때 처리가 안 되는 중.
-	*/
+        /* Allocate a new anonymous stack page at the given address. */
+        void *addr_aligned = pg_round_down(addr);
+        /* Create an uninitialised page marked as stack. */
+        if (vm_alloc_page_with_initializer(VM_ANON | VM_MARKER_STACK,
+                                           addr_aligned, true, NULL, NULL))
+        {
+                /* Immediately claim the page so that it becomes usable. */
+                vm_claim_page(addr_aligned);
+        }
 }
 
 /* 쓰기 보호된 페이지에 대한 예외를 처리합니다. */
@@ -332,35 +332,30 @@ You can use the functions in threads/mmu.c.
 // - 페이지 폴트가 발생하면 `userprog/exception.c`의 `page_fault()`에서 `vm_try_handle_fault` 함수를 호출합니다.
 // - 이 함수에서 **해당 페이지 폴트가 스택 확장으로 처리 가능한지**를 판단해야 합니다.
 // - 판단 기준을 만족하면 `vm_stack_growth()`를 호출해 해당 주소까지 스택을 확장합니다.
-
 bool vm_try_handle_fault(struct intr_frame *f, void *addr,
-						 bool user, bool write, bool not_present)
+                                                 bool user, bool write, bool not_present)
 {
-	dprintfc("[vm_try_handle_fault] fault handle start. addr: %p\n", addr);
+        struct supplemental_page_table *spt = &thread_current()->spt;
+        void *rsp = is_kernel_vaddr(f->rsp) ? thread_current()->rsp : f->rsp;
 
-	struct supplemental_page_table *spt = &thread_current()->spt; // 현재 쓰레드의 spt 가져옴.
-	struct page *page;
+        if (not_present)
+        {
+                if (addr >= rsp - STACK_HEURISTIC && addr >= STACK_MAX && addr < USER_STACK)
+                        vm_stack_growth(addr);
+        }
 
-	dprintfc("[vm_try_handle_fault] checking f->rsp: %p\n", f->rsp);
-	
-	void *rsp = is_kernel_vaddr(f->rsp) ? thread_current()->rsp : f->rsp;
+        struct page *page = spt_find_page(spt, addr);
 
-	/* DEBUG: 기존 스택 성장 조건은 아래와 같았음.
-	* `if (f->rsp - 8 == addr)`
-	* 차이점: f->rsp가 페이지 폴트 발생 위치보다 위에 있을 경우를 고려하지 않았음.
-	* 문제가 된 이유: 
-	* 왜 stack이 역성장을 하는걸까?
-	*/
+        if (page == NULL)
+                return false;
 
-	if (addr <= rsp && addr < USER_STACK && addr >= STACK_MAX) // 합법적인 스택 확장 요청인지 판단. user stack의 최대 크기인 1MB를 초과하지 않는지 check
-	{
-		dprintfc("[vm_try_handle_fault] expending stack page\n");
-		vm_stack_growth(addr);
-	}
+        if (write && !page->writable)
+                return false;
 
-	page = spt_find_page(spt, addr); // page를 null로 설정해. stack growth 경우에는 spt 찾을 필요 없지 않나? 어차피 없을텐데.
-	return vm_do_claim_page(page);	 // 그 페이지에 대응하는 프레임을 할당받아.
+        return vm_do_claim_page(page);
 }
+
+
 
 /* 페이지를 해제합니다.
  * 이 함수는 수정하지 마세요. */
@@ -380,17 +375,17 @@ void vm_dealloc_page(struct page *page)
 bool vm_claim_page(void *va)
 {
 	ASSERT(va != NULL);
-	dprintfa("[VM_CLAIM_PAGE] routine start. va: %p\n", va);
+	// debug removed;
 
 	struct page *page = NULL;
 	page = spt_find_page(&thread_current()->spt, va); // va를 가지고 현재 쓰레드의 spt 에서 페이지를 찾아냄.
 	if (page == NULL)
 	{
 		// spt에 없으면 false 리턴.
-		dprintfa("[VM_CLAIM_PAGE] no found in spt\n");
+		// debug removed;
 		return false;
 	}
-	dprintfa("[VM_CLAIM_PAGE] page for va found in spt(%p). running vm_do_claim_page\n", page);
+// debug removed;
 	return vm_do_claim_page(page); // 있으면 바로 프레임 할당해서 돌려줌.
 }
 
@@ -406,7 +401,7 @@ vm_do_claim_page(struct page *page)
 	{
 		return false;
 	}
-	dprintfc("[vm_do_claim_page] routine start. page->va: %p\n", page->va);
+	// debug removed;
 
 	struct frame *frame = vm_get_frame(); // 메모리 공간에서 프레임 하나 확보
 	ASSERT(frame != NULL);
@@ -420,12 +415,12 @@ vm_do_claim_page(struct page *page)
 	{
 		if (!pml4_set_page(thread_current()->pml4, page->va, frame->kva, page->writable))
 		{
-			dprintfc("[vm_do_claim_page] pml4 set failed\n");
+			// debug removed;
 			return false;
 		}
 	}
 
-	dprintfc("[vm_do_claim_page] do claim success. va: %p, pa: %p\n", page->va, page->frame->kva);
+	// debug removed;
 	return swap_in(page, frame->kva);
 }
 
@@ -468,7 +463,7 @@ spt_destroy_page_in_copy_failure(struct hash_elem *e, void *aux UNUSED)
 // {
 // 	ASSERT(src != NULL); // 포인터 유효성 검사
 // 	ASSERT(dst != NULL);
-// 	dprintfe("[supplemental_page_table_copy] routine start\n");
+// debug removed;
 // 	struct hash_iterator hi;	 // 이터레이터 선언
 // 	hash_first(&hi, &src->hash); // 이터레이터 초기화
 
