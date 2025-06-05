@@ -328,34 +328,45 @@ You can use the functions in threads/mmu.c.
 // - 이 함수에서 **해당 페이지 폴트가 스택 확장으로 처리 가능한지**를 판단해야 합니다.
 // - 판단 기준을 만족하면 `vm_stack_growth()`를 호출해 해당 주소까지 스택을 확장합니다.
 
+// not_present: page 존재 여부. 만약 존재하는데도 폴트가 났다면 권한 문제. -> exit(-1) 처리.
 bool vm_try_handle_fault(struct intr_frame *f, void *addr,
 						 bool user, bool write, bool not_present)
 {
+
+	// HACK: not_present 처리는 언제 해 주는지 잘 모르겠음.
 	dprintfc("[vm_try_handle_fault] fault handle start. addr: %p\n", addr);
-
 	struct supplemental_page_table *spt = &thread_current()->spt; // 현재 쓰레드의 spt 가져옴.
-	struct page *page;
 
-	dprintfc("[vm_try_handle_fault] checking f->rsp: %p\n", f->rsp);
-
-	void *rsp = is_kernel_vaddr(f->rsp) ? thread_current()->rsp : f->rsp;
-
-	/* DEBUG: 기존 스택 성장 조건은 아래와 같았음.
-	 * `if (f->rsp - 8 == addr)`
-	 * 차이점: f->rsp가 페이지 폴트 발생 위치보다 위에 있을 경우를 고려하지 않았음.
-	 */
-
-	if (addr >= rsp - 8 && addr < USER_STACK && addr >= STACK_MAX) // 합법적인 스택 확장 요청인지 판단. user stack의 최대 크기인 1MB를 초과하지 않는지 check
+	
+	if (not_present) 
 	{
-		dprintff("[vm_try_handle_fault] expending stack page\n");
-		vm_stack_growth(pg_round_down(addr));
-		return true;
+		void *rsp = is_kernel_vaddr(f->rsp) ? thread_current()->rsp : f->rsp;
+	
+		/* DEBUG: 기존 스택 성장 조건은 아래와 같았음.
+		 * `if (f->rsp - 8 == addr)`
+		 * 차이점: f->rsp가 페이지 폴트 발생 위치보다 위에 있을 경우를 고려하지 않았음.
+		 */
+	
+		if (addr >= rsp - 8 && addr < USER_STACK && addr >= STACK_MAX) // 합법적인 스택 확장 요청인지 판단. user stack의 최대 크기인 1MB를 초과하지 않는지 check
+		{
+			dprintff("[vm_try_handle_fault] expending stack page\n");
+			vm_stack_growth(pg_round_down(addr));
+			return true;
+		}
+		else
+		{
+			struct page *page;
+			page = spt_find_page(spt, addr); // page를 null로 설정해. stack growth 경우에는 spt 찾을 필요 없지 않나? 어차피 없을텐데.
+			if (write && !page->writable)
+			{
+                return false;
+			}
+			return vm_do_claim_page(page);	 // 그 페이지에 대응하는 프레임을 할당받아.
+		}
 	}
 	else
 	{
-
-		page = spt_find_page(spt, addr); // page를 null로 설정해. stack growth 경우에는 spt 찾을 필요 없지 않나? 어차피 없을텐데.
-		return vm_do_claim_page(page);	 // 그 페이지에 대응하는 프레임을 할당받아.
+		return false;
 	}
 }
 
@@ -420,6 +431,11 @@ vm_do_claim_page(struct page *page)
 			dprintfc("[vm_do_claim_page] pml4 set failed\n");
 			return false;
 		}
+	}
+	else
+	{
+		dprintfc("[vm_do_claim_page] already in pml4\n");
+		return false;
 	}
 
 	dprintfc("[vm_do_claim_page] do claim success. va: %p, pa: %p\n", page->va, page->frame->kva);

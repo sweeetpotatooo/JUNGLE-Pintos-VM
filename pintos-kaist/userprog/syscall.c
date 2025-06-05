@@ -1,5 +1,5 @@
-#include "filesys/filesys.h" // 잡았다 요놈!
-#include "userprog/process.h" // 잡았다 요놈!
+#include "filesys/filesys.h" 
+#include "userprog/process.h" 
 #include "threads/palloc.h"
 #include "filesys/file.h"
 
@@ -12,6 +12,7 @@
 #include "userprog/gdt.h"
 #include "threads/flags.h"
 #include "intrinsic.h"
+#include "vm/file.h"
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
@@ -42,8 +43,8 @@ void check_address(const uint64_t *addr);
  */
 void check_address(const uint64_t *addr){
 	struct thread *cur = thread_current();
-	dprintfe("[check_address] routine start\n");
-	if (addr == NULL || !(is_user_vaddr(addr)) ||!spt_find_page(&cur->spt, addr)) 
+	dprintfe("[check_address] routine start\n"); //|| !is_writable(pml4_get_page(cur->pml4, addr))
+	if (addr == NULL || !(is_user_vaddr(addr)) ||!spt_find_page(&cur->spt, addr) || !is_writable(pml4e_walk (cur->pml4, (uint64_t) addr, 0))) 
 		exit(-1);
 	if(pml4_get_page(cur->pml4, addr) == NULL) dprintfe("[check_address] addr not in pml4\n");
 	dprintfe("[check_address] check pass!\n");

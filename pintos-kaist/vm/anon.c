@@ -51,8 +51,9 @@ bool anon_initializer(struct page *page, enum vm_type type, void *kva)
 static bool
 anon_swap_in(struct page *page, void *kva)
 {
-    PANIC("anon swap in"); // 분명히 호출히 호출돼야 하잖아.
+    // PANIC("anon swap in"); // 분명히 호출히 호출돼야 하잖아.
     struct anon_page *anon_page = &page->anon;
+    return true;
 }
 
 /* 스왑 디스크에 내용을 써서 페이지를 스왑아웃합니다 */
@@ -60,6 +61,7 @@ static bool
 anon_swap_out(struct page *page)
 {
     struct anon_page *anon_page = &page->anon;
+    return true;
 }
 
 /* 익명 페이지를 파괴합니다. PAGE는 호출자가 해제합니다 */
