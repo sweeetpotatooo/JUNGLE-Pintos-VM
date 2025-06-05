@@ -19,6 +19,9 @@ bool create(const char *file, unsigned initial_size);
 bool remove(const char *file) ;
 void check_address(const uint64_t *addr);
 
+/* Definition of the global file system lock declared in syscall.h. */
+struct lock filesys_lock;
+
 /* System call.
  *
  * Previously system call services was handled by the interrupt handler

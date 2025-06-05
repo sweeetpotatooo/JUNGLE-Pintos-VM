@@ -1,7 +1,8 @@
 #ifndef USERPROG_SYSCALL_H
 #define USERPROG_SYSCALL_H
 
-struct lock filesys_lock;
+/* Global lock used to protect file system operations. */
+extern struct lock filesys_lock;
 
 void syscall_init (void);
 
