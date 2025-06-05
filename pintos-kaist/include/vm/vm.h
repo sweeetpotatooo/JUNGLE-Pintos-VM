@@ -5,8 +5,12 @@
 #include "threads/palloc.h"
 #include "threads/vaddr.h"
 
-/* Maximum size of user stack is 1 MB. */
-#define STACK_HEURISTIC 8
+/*
+ * Number of bytes below the current stack pointer which we still
+ * regard as a valid stack access.  If a faulting address lies within
+ * this range, the stack is allowed to grow.
+ */
+#define STACK_HEURISTIC 32
 
 /* ─────────────────────────────────────────────
    가상 페이지의 종류(enum vm_type)

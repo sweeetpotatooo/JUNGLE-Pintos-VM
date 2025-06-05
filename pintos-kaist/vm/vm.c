@@ -335,14 +335,17 @@ You can use the functions in threads/mmu.c.
 bool vm_try_handle_fault(struct intr_frame *f, void *addr,
                                                  bool user, bool write, bool not_present)
 {
-        struct supplemental_page_table *spt = &thread_current()->spt;
-        void *rsp = is_kernel_vaddr(f->rsp) ? thread_current()->rsp : f->rsp;
+       struct supplemental_page_table *spt = &thread_current()->spt;
+       /* Use the correct stack pointer depending on the fault origin. */
+       void *rsp_stack = is_kernel_vaddr(f->rsp) ? thread_current()->rsp : f->rsp;
 
-        if (not_present)
-        {
-                if (addr >= rsp - STACK_HEURISTIC && addr >= STACK_MAX && addr < USER_STACK)
-                        vm_stack_growth(addr);
-        }
+       if (not_present)
+       {
+               /* Grow stack if the faulting access is close enough to the
+                  current stack pointer and within the user stack region. */
+               if (addr >= rsp_stack - STACK_HEURISTIC && addr >= STACK_MAX && addr < USER_STACK)
+                       vm_stack_growth(addr);
+       }
 
         struct page *page = spt_find_page(spt, addr);
 
