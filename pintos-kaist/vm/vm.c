@@ -359,7 +359,7 @@ bool vm_try_handle_fault(struct intr_frame *f, void *addr,
 			page = spt_find_page(spt, addr); // page를 null로 설정해. stack growth 경우에는 spt 찾을 필요 없지 않나? 어차피 없을텐데.
 			if (write && !page->writable)
 			{
-                return false;
+        return false;
 			}
 			return vm_do_claim_page(page);	 // 그 페이지에 대응하는 프레임을 할당받아.
 		}

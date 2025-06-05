@@ -50,7 +50,13 @@ void check_address(const uint64_t *addr){
 	dprintfe("[check_address] check pass!\n");
 
 }
-
+static void check_writable_address(const uint64_t *addr){
+        struct thread *cur = thread_current();
+        check_address(addr);
+        struct page *page = spt_find_page(&cur->spt, addr);
+        if(page == NULL || !page->writable)
+                exit(-1);
+}
 /**
  * halt - 머신을 halt함.
  * 
@@ -233,9 +239,9 @@ int filesize(int fd) {
  */
 int read(int fd, void *buffer, unsigned size){
 	// 1. 주소 범위 검증
-	dprintfe("[read] routine start. \n");
-	check_address(buffer);
-    check_address(buffer + size-1); 
+        dprintfe("[read] routine start. \n");
+        check_writable_address(buffer);
+        check_writable_address(buffer + size - 1);
     if (size == 0)
         return 0;
     if (buffer == NULL || !is_user_vaddr(buffer))
