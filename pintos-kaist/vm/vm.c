@@ -249,7 +249,7 @@ vm_get_frame(void)
 
 /* 스택 확장 */
 // - 주어진 주소 `addr`까지 스택 크기를 확장합니다.
-// - 하나 이상의 **익명 페이지(anonymous page)**를 할당해 폴트가 더 이상 발생하지 않도록 합니다. // HACK: "하나 이상?"
+// - 하나 이상의 **익명 페이지(anonymous page)**를 할당해 폴트가 더 이상 발생하지 않도록 합니다. // HACK: "하나 이상?" -> 단일 page 확장
 // - 이때 **`addr`은 반드시 페이지 단위(PGSIZE)로 내림(round down)** 처리 후 할당해야 합니다.
 // - 대부분의 운영체제는 **스택의 최대 크기를 제한**합니다.
 // - 예: 유닉스 계열의 `ulimit` 명령으로 조정 가능
@@ -259,9 +259,14 @@ static void
 vm_stack_growth(void *addr)
 {
 	// HACK: thread_current()->rsp 는 건들지도 않았는데 구현 됨. 이거 왜 하라는 거임?
+	void *addr_aligned = pg_round_down(addr);
 	dprintfc("[vm_stack_growth] routine start\n");
-	bool result = vm_alloc_page_with_initializer(VM_ANON | VM_MARKER_STACK, addr, true, NULL, NULL);
-	dprintfc("[vm_stack_growth] vm_alloc complete. result: %d\n", result);
+	bool result = vm_alloc_page_with_initializer(VM_ANON | VM_MARKER_STACK, addr_aligned, true, NULL, NULL);
+	
+	dprintff("[vm_stack_growth] vm_alloc complete. result: %d. stack address: %p\n", result, addr_aligned);
+	/* 
+	* DEBUG: 스택이 한방에 밑으로 자라날 때 처리가 안 되는 중.
+	*/
 }
 
 /* 쓰기 보호된 페이지에 대한 예외를 처리합니다. */
@@ -336,10 +341,20 @@ bool vm_try_handle_fault(struct intr_frame *f, void *addr,
 	struct supplemental_page_table *spt = &thread_current()->spt; // 현재 쓰레드의 spt 가져옴.
 	struct page *page;
 
-	if ((f->rsp - 8 == addr)) // stack growth 경우
+	dprintfc("[vm_try_handle_fault] checking f->rsp: %p\n", f->rsp);
+	
+	void *rsp = is_kernel_vaddr(f->rsp) ? thread_current()->rsp : f->rsp;
+
+	/* DEBUG: 기존 스택 성장 조건은 아래와 같았음.
+	* `if (f->rsp - 8 == addr)`
+	* 차이점: f->rsp가 페이지 폴트 발생 위치보다 위에 있을 경우를 고려하지 않았음.
+	* 문제가 된 이유: 
+	* 왜 stack이 역성장을 하는걸까?
+	*/
+
+	if (addr <= rsp && addr < USER_STACK && addr >= STACK_MAX) // 합법적인 스택 확장 요청인지 판단. user stack의 최대 크기인 1MB를 초과하지 않는지 check
 	{
 		dprintfc("[vm_try_handle_fault] expending stack page\n");
-		thread_current()->rsp = f->rsp;
 		vm_stack_growth(addr);
 	}
 
