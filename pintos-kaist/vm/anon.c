@@ -32,15 +32,15 @@ void vm_anon_init(void)
 bool anon_initializer(struct page *page, enum vm_type type, void *kva)
 {
     /* 핸들러 설정 */
-    dprintfc("[anon_initializer] routine start page va: %p\n", page->va);
+    dprintfb("[anon_initializer] routine start page va: %p\n", page->va);
     
     page->operations = &anon_ops;
     
-    dprintfc("[anon_initializer] setting anon_ops. %p\n", page->operations);
+    dprintfb("[anon_initializer] setting anon_ops. %p\n", page->operations);
     
     struct anon_page *anon_page = &page->anon;
     // TODO: anon_page 속성 추가될 경우 여기서 초기화.
-    dprintfc("[anon_initializer] done. returning true\n");
+    dprintfb("[anon_initializer] done. returning true\n");
     return true; 
 }
 

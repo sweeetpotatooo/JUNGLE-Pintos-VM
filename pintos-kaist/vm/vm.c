@@ -248,9 +248,25 @@ vm_get_frame(void)
 }
 
 /* 스택 확장 */
+// - 주어진 주소 `addr`까지 스택 크기를 확장합니다.
+// - 하나 이상의 **익명 페이지(anonymous page)**를 할당해 폴트가 더 이상 발생하지 않도록 합니다. // HACK: "하나 이상?" -> 단일 page 확장
+// - 이때 **`addr`은 반드시 페이지 단위(PGSIZE)로 내림(round down)** 처리 후 할당해야 합니다.
+// - 대부분의 운영체제는 **스택의 최대 크기를 제한**합니다.
+// - 예: 유닉스 계열의 `ulimit` 명령으로 조정 가능
+// - GNU/Linux 시스템의 기본값: 약 **8MB**
+// - 본 프로젝트에서는 스택 최대 크기를 **1MB**로 제한해야 합니다. // HACK: 제한 안 걸어 놨음.
 static void
-vm_stack_growth(void *addr UNUSED)
+vm_stack_growth(void *addr)
 {
+	// HACK: thread_current()->rsp 는 건들지도 않았는데 구현 됨. 이거 왜 하라는 거임?
+	void *addr_aligned = pg_round_down(addr);
+	dprintfc("[vm_stack_growth] routine start\n");
+	bool result = vm_alloc_page_with_initializer(VM_ANON | VM_MARKER_STACK, addr_aligned, true, NULL, NULL);
+	
+	dprintff("[vm_stack_growth] vm_alloc complete. result: %d. stack address: %p\n", result, addr_aligned);
+	/* 
+	* DEBUG: 스택이 한방에 밑으로 자라날 때 처리가 안 되는 중.
+	*/
 }
 
 /* 쓰기 보호된 페이지에 대한 예외를 처리합니다. */
@@ -312,20 +328,38 @@ You can use the functions in threads/mmu.c.
 // threads/mmu.c에 있는 함수들을 사용하여 이를 설정합니다.
 
 /* 성공 시 true를 반환합니다. */
+
+// - 페이지 폴트가 발생하면 `userprog/exception.c`의 `page_fault()`에서 `vm_try_handle_fault` 함수를 호출합니다.
+// - 이 함수에서 **해당 페이지 폴트가 스택 확장으로 처리 가능한지**를 판단해야 합니다.
+// - 판단 기준을 만족하면 `vm_stack_growth()`를 호출해 해당 주소까지 스택을 확장합니다.
+
 bool vm_try_handle_fault(struct intr_frame *f, void *addr,
 						 bool user, bool write, bool not_present)
 {
 	dprintfc("[vm_try_handle_fault] fault handle start. addr: %p\n", addr);
+
 	struct supplemental_page_table *spt = &thread_current()->spt; // 현재 쓰레드의 spt 가져옴.
-	struct page *page = spt_find_page(spt, addr);				  // page를 null로 설정해
-	dprintfc("[vm_try_handle_fault] fault handler found page. page->va: %p\n", page->va);
-	/* TODO: 예외에 대한 유효성 검사 수행 */
-	/* TODO: 여기에 코드를 작성하세요. */
-	// PANIC("vm try handle fault까지 왔음.");
-	// 중간에 이 페이지가 뭔지 정의되는 과정이 없음. 그 정의는 어디 있어?
-	bool result = vm_do_claim_page(page);
-	dprintfc("[vm_try_handle_fault] result %d\n", result);
-	return result; // 그 페이지에 대응하는 프레임을 할당받아.
+	struct page *page;
+
+	dprintfc("[vm_try_handle_fault] checking f->rsp: %p\n", f->rsp);
+	
+	void *rsp = is_kernel_vaddr(f->rsp) ? thread_current()->rsp : f->rsp;
+
+	/* DEBUG: 기존 스택 성장 조건은 아래와 같았음.
+	* `if (f->rsp - 8 == addr)`
+	* 차이점: f->rsp가 페이지 폴트 발생 위치보다 위에 있을 경우를 고려하지 않았음.
+	* 문제가 된 이유: 
+	* 왜 stack이 역성장을 하는걸까?
+	*/
+
+	if (addr <= rsp && addr < USER_STACK && addr >= STACK_MAX) // 합법적인 스택 확장 요청인지 판단. user stack의 최대 크기인 1MB를 초과하지 않는지 check
+	{
+		dprintfc("[vm_try_handle_fault] expending stack page\n");
+		vm_stack_growth(addr);
+	}
+
+	page = spt_find_page(spt, addr); // page를 null로 설정해. stack growth 경우에는 spt 찾을 필요 없지 않나? 어차피 없을텐데.
+	return vm_do_claim_page(page);	 // 그 페이지에 대응하는 프레임을 할당받아.
 }
 
 /* 페이지를 해제합니다.
@@ -368,7 +402,8 @@ bool vm_claim_page(void *va)
 static bool
 vm_do_claim_page(struct page *page)
 {
-	if(page == NULL) {
+	if (page == NULL)
+	{
 		return false;
 	}
 	dprintfc("[vm_do_claim_page] routine start. page->va: %p\n", page->va);
@@ -491,37 +526,40 @@ spt_destroy_page_in_copy_failure(struct hash_elem *e, void *aux UNUSED)
 // 	hash_init(&dst->hash, page_hash, page_less, NULL);
 // 	return false;
 // }
-bool
-supplemental_page_table_copy(struct supplemental_page_table *dst,
-                             struct supplemental_page_table *src) {
-    struct hash_iterator i;
-    hash_first(&i, &src->hash);
+bool supplemental_page_table_copy(struct supplemental_page_table *dst,
+								  struct supplemental_page_table *src)
+{
+	struct hash_iterator i;
+	hash_first(&i, &src->hash);
 
-    while (hash_next(&i)) {
-        struct page *src_page = hash_entry(hash_cur(&i), struct page, hash_elem);
-        enum vm_type type = page_get_type(src_page);
-        void *upage = src_page->va;
+	while (hash_next(&i))
+	{
+		struct page *src_page = hash_entry(hash_cur(&i), struct page, hash_elem);
+		enum vm_type type = page_get_type(src_page);
+		void *upage = src_page->va;
 
-        // 1. 새로운 페이지를 dst SPT에 할당
-        if (!vm_alloc_page_with_initializer(type, upage, src_page->writable,
-                                            src_page->uninit.init, src_page->uninit.aux)) {
-            return false;
-        }
+		// 1. 새로운 페이지를 dst SPT에 할당
+		if (!vm_alloc_page_with_initializer(type, upage, src_page->writable,
+											src_page->uninit.init, src_page->uninit.aux))
+		{
+			return false;
+		}
 
-        // 2. 새로 할당된 페이지를 찾고 claim
-        struct page *dst_page = spt_find_page(dst, upage);
-        if (!vm_claim_page(upage)) {
-            return false;
-        }
+		// 2. 새로 할당된 페이지를 찾고 claim
+		struct page *dst_page = spt_find_page(dst, upage);
+		if (!vm_claim_page(upage))
+		{
+			return false;
+		}
 
-        // 3. 부모의 프레임이 존재하면, 자식의 프레임으로 데이터 복사
-        if (src_page->frame != NULL) {
-            memcpy(dst_page->frame->kva, src_page->frame->kva, PGSIZE);
-        }
-    }
-    return true;
+		// 3. 부모의 프레임이 존재하면, 자식의 프레임으로 데이터 복사
+		if (src_page->frame != NULL)
+		{
+			memcpy(dst_page->frame->kva, src_page->frame->kva, PGSIZE);
+		}
+	}
+	return true;
 }
-
 
 /* supplemental page table이 가지고 있는 리소스를 해제합니다. */
 void supplemental_page_table_kill(struct supplemental_page_table *spt)

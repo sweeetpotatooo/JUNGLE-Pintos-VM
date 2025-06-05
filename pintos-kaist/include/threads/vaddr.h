@@ -36,6 +36,7 @@
 
 /* User stack start */
 #define USER_STACK 0x47480000
+#define STACK_MAX USER_STACK - (1 << 20) // user stack의 최대 크기 1MB를 나타냄
 
 /* Returns true if VADDR is a user virtual address. */
 #define is_user_vaddr(vaddr) (!is_kernel_vaddr((vaddr)))

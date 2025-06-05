@@ -847,13 +847,13 @@ lazy_load_segment(struct page *page, void *aux)
 	/* 파일에서 세그먼트를 읽어옵니다. */
 	/* 이 함수는 주소 VA에서 첫 페이지 폴트가 발생했을 때 호출됩니다. */
 	/* 이 함수를 호출할 때 VA를 사용할 수 있습니다. */
-	dprintfc("[lazy_load_segment] routine start. page: %p, page->va: %p\n", page, page->va);
+	dprintfb("[lazy_load_segment] routine start. page: %p, page->va: %p\n", page, page->va);
 	void *va = page->va; 
 	
 	/* Load this page. */
 	struct lazy_aux *lazy_aux = (struct lazy_aux *)aux;
 	
-	dprintfc("[lazy_load_segment] reading file\n");
+	dprintfb("[lazy_load_segment] reading file\n");
 	if (lazy_aux->read_bytes > 0) // Only attempt to read if there are bytes to read
 	{ 
 		if (file_read_at(lazy_aux->file, page->frame->kva, lazy_aux->read_bytes, lazy_aux->ofs) != (int)lazy_aux->read_bytes)
@@ -862,9 +862,9 @@ lazy_load_segment(struct page *page, void *aux)
 		}
 	}
 
-	dprintfc("[lazy_load_segment] file read complete\n");
+	dprintfb("[lazy_load_segment] file read complete\n");
 	memset(page->frame->kva + lazy_aux->read_bytes, 0, lazy_aux->zero_bytes); // zero bytes 복사.
-	dprintfc("[lazy_load_segment] zero bytes copied. lazy load success\n");
+	dprintfb("[lazy_load_segment] zero bytes copied. lazy load success\n");
 	return true;
 }
 
@@ -934,7 +934,7 @@ setup_stack(struct intr_frame *if_)
 {
 	dprintf("[SETUP_STACK] routine start\n");
 	bool success = false;
-	void *stack_bottom = (void *)(((uint8_t *)USER_STACK) - PGSIZE); // 유저 프로세스의 가상 주소상의 stack bottom
+	void *stack_bottom = (void *)(((uint8_t *)USER_STACK) - PGSIZE); // 유저 프로세스의 가상 주소상의 stack bottom. = 4747f000
 	
 	/* stack_bottom에 스택을 매핑한 뒤 즉시 페이지를 claim 하십시오.
 	 * 성공하면 rsp 값을 적절히 설정합니다.
@@ -944,7 +944,7 @@ setup_stack(struct intr_frame *if_)
 	// (e.g. VM_MARKER_0) to mark the page.
 	
 	dprintf("[SETUP_STACK] allocating stack bottom: %p\n", stack_bottom);
-	if (vm_alloc_page_with_initializer(VM_ANON | VM_MARKER_STACK, stack_bottom, true, anon_initializer, NULL)) // HACK: 전반적으로 잘 모르겠음.
+	if (vm_alloc_page_with_initializer(VM_ANON | VM_MARKER_STACK, stack_bottom, true, NULL, NULL)) // HACK: 전반적으로 잘 모르겠음.
 	{
 		dprintf("[SETUP_STACK] vm_alloc_page_with_initializer complete\n");
 		success = vm_claim_page(stack_bottom); // stack_bottom 주소로 프레임을 할당.

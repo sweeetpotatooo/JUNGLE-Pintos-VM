@@ -110,6 +110,7 @@ struct thread {
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
 	struct supplemental_page_table spt;
+	struct uint64_t *rsp; // HACK: 타입이 적절한가? 사유: rsp는 64바이트 주소. 
 #endif
 
 	/* Owned by thread.c. */

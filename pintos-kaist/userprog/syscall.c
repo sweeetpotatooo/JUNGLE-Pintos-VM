@@ -265,6 +265,36 @@ int read(int fd, void *buffer, unsigned size){
     return ret;
 }
 
+// 1. addr이 0인지 check한다
+// 2. fd가 0이나 1이 아닌지 check한다
+// 3.file 용량이 0인지 check 한다.
+// 4. addr의 page에 spt가 없어야 한다?
+// 5. addr aline인있는 지 c
+void *mmap (void *addr, size_t length, int writable, int fd, off_t offset) 
+{
+	struct thread *curr = thread_current();
+	if (addr == NULL || length == 0 || fd == 0 || fd == 1 || (uint64_t) addr % 4096 != 0 || spt_find_page(&curr->spt, addr)) {
+		return NULL;
+	}
+	sema_down(&filesys_lock);
+	struct file *file = open(curr->fd_table[fd]); 
+	sema_up(&filesys_lock);
+	
+	void *upage = do_mmap(addr, length, writable, file, offset);
+	
+	sema_down(&filesys_lock);
+	close(fd);
+	sema_up(&filesys_lock);
+	
+
+	return upage;
+}
+
+void munmap(void *addr){
+	do_munmap(addr);
+}
+
+
 void syscall_init (void) {
 	write_msr(MSR_STAR, ((uint64_t)SEL_UCSEG - 0x10) << 48  |
 			((uint64_t)SEL_KCSEG) << 32);
@@ -344,6 +374,11 @@ void syscall_handler (struct intr_frame *f UNUSED) {
 			// printf("SYS_CLOSE [%d]", sys_call_number);
 			close(f->R.rdi);
 			break;
+		case SYS_MMAP:
+			f->R.rax = mmap(f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r8);
+			break;
+		case SYS_MUNMAP:
+			munmap(f->R.rdi);
 		default:
 			printf("FATAL: UNDEFINED SYSTEM CALL!, %d", sys_call_number);
 			exit(-1);
