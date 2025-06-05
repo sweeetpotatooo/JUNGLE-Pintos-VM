@@ -19,6 +19,7 @@ void syscall_handler (struct intr_frame *);
 bool create(const char *file, unsigned initial_size);
 bool remove(const char *file) ;
 void check_address(const uint64_t *addr);
+struct lock filesys_lock;
 
 /* System call.
  *
@@ -42,13 +43,21 @@ void check_address(const uint64_t *addr);
  * @param addr: 주소값.
  */
 void check_address(const uint64_t *addr){
-	struct thread *cur = thread_current();
-	dprintfe("[check_address] routine start\n"); //|| !is_writable(pml4_get_page(cur->pml4, addr))
-	if (addr == NULL || !(is_user_vaddr(addr)) ||!spt_find_page(&cur->spt, addr) ) 
-		exit(-1);
-	if(pml4_get_page(cur->pml4, addr) == NULL) dprintfe("[check_address] addr not in pml4\n");
-	dprintfe("[check_address] check pass!\n");
+        struct thread *cur = thread_current();
+        dprintfe("[check_address] routine start\n");
+        if (addr == NULL || !is_user_vaddr(addr) || !spt_find_page(&cur->spt, addr))
+                exit(-1);
+        if(pml4_get_page(cur->pml4, addr) == NULL) dprintfe("[check_address] addr not in pml4\n");
+        dprintfe("[check_address] check pass!\n");
 
+}
+
+static void check_writable_address(const uint64_t *addr){
+        struct thread *cur = thread_current();
+        check_address(addr);
+        struct page *page = spt_find_page(&cur->spt, addr);
+        if(page == NULL || !page->writable)
+                exit(-1);
 }
 
 /**
@@ -232,10 +241,10 @@ int filesize(int fd) {
  * @param size: 복사할 크기.
  */
 int read(int fd, void *buffer, unsigned size){
-	// 1. 주소 범위 검증
-	dprintfe("[read] routine start. \n");
-	check_address(buffer);
-    check_address(buffer + size-1); 
+        // 1. 주소 범위 검증
+        dprintfe("[read] routine start. \n");
+        check_writable_address(buffer);
+        check_writable_address(buffer + size - 1);
     if (size == 0)
         return 0;
     if (buffer == NULL || !is_user_vaddr(buffer))
