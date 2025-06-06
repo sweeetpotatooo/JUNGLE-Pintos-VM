@@ -11,6 +11,7 @@ struct file_page {
 	struct file *file;
 	off_t size;
 	off_t file_ofs;
+	size_t cnt;
 };
 
 /* file_backed_page의 vm_initializer 함수의 인자값. file_backed page의 첫 번째 페이지 폴트 발생 시 
@@ -20,6 +21,7 @@ struct lazy_aux_file_backed {
 	int writable;
 	struct file *file;
 	off_t offset;
+	size_t cnt;
 };
 
 void vm_file_init (void);

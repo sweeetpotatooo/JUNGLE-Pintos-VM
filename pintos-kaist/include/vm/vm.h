@@ -23,6 +23,7 @@ enum vm_type {
 	   int 범위 안에서 값만 겹치지 않도록 원하는 만큼 확장할 수 있다. */
 	VM_MARKER_0 = (1 << 3), // VM_MARKER 
 	VM_MARKER_1 = (1 << 4),
+	VM_FILE_FIRST = (1 << 5),
 	VM_MARKER_STACK = (1 << 5),
 
 	/* 이 값보다 큰 비트를 사용하지 말 것. */

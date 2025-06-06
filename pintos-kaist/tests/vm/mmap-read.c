@@ -14,7 +14,7 @@ test_main (void)
   void *map;
   size_t i;
 
-  CHECK ((handle = open ("sample.txt")) > 1, "open \"sample.txt\"");
+  CHECK ((handle = open ("sample.txt")) > 1, "open \"sample.txt\""); // sample.txt의 버퍼 주소가 커널 영역으로 찍힘. 전체 프로세스가 커널 영역에 생성됐다는 의미인가? 엄청 큰일난 거 안ㄴ
   CHECK ((map = mmap (actual, 4096, 0, handle, 0)) != MAP_FAILED, "mmap \"sample.txt\"");
 
   /* Check that data is correct. */

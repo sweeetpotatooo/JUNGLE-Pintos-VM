@@ -47,20 +47,24 @@ void check_address(const uint64_t *addr);
  */
 void check_address(const uint64_t *addr){
 	struct thread *cur = thread_current();
-	dprintfe("[check_address] routine start\n"); //|| !is_writable(pml4_get_page(cur->pml4, addr))
-	if (addr == NULL || !(is_user_vaddr(addr)) ||!spt_find_page(&cur->spt, addr) ) 
+	dprintfg("[check_address] routine start: %p\n", addr); 
+	if (addr == NULL || !(is_user_vaddr(addr))) {
+		dprintfg("[check_address] check failed!\n");
 		exit(-1);
-	if(pml4_get_page(cur->pml4, addr) == NULL) dprintfe("[check_address] addr not in pml4\n");
-	dprintfe("[check_address] check pass!\n");
+	}
+	dprintfg("[check_address] check pass!\n");
+}
 
+void check_address_writable(const uint64_t *addr)
+{
+	struct page *page = spt_find_page(&thread_current()->spt, addr);
+	if (!page->writable)
+	{
+		exit(-1);
+	}
 }
-static void check_writable_address(const uint64_t *addr){
-        struct thread *cur = thread_current();
-        //check_address(addr);
-        struct page *page = spt_find_page(&cur->spt, addr);
-        if(page == NULL || !page->writable)
-                exit(-1);
-}
+
+
 /**
  * halt - 머신을 halt함.
  * 
@@ -188,7 +192,9 @@ bool remove(const char *file) {
  * @param file: 오픈할 파일.
  */
 int open(const char *filename) {
+	dprintfg("[open] routine start. filename: %p\n", filename);
 	check_address(filename); // 이상한 포인터면 즉시 종료
+	dprintfg("[open] validation complete\n");
 	struct file *file_obj = filesys_open(filename);
 	
 	if (file_obj == NULL) {
@@ -196,11 +202,14 @@ int open(const char *filename) {
 	}
 
 	int fd = process_add_file(file_obj);
+	dprintfg("[open] process add file done\n");
 
 	if (fd == -1) { // fd table 꽉찬 경우 그냥 닫아버림
+		dprintfg("[open] failed\n");
 		file_close(file_obj);
     	file_obj = NULL;
 	}
+	dprintfg("[open] success\n");
 	
 	return fd;
 }
@@ -245,9 +254,13 @@ int read(int fd, void *buffer, unsigned size){
 			check_address(buffer);
 			check_address(buffer + size - 1); 
 	// 1. 주소 범위 검증
-        dprintfe("[read] routine start. \n");
-        // check_writable_address(buffer);
-        // check_writable_address(buffer + size - 1);
+	dprintfe("[read] routine start. \n");
+	check_address(buffer);
+    check_address(buffer + size-1); 
+	if(!(spt_find_page(&thread_current()->spt, buffer)->writable))
+	{
+		exit(-1);
+	}
     if (size == 0)
         return 0;
     if (buffer == NULL || !is_user_vaddr(buffer))
@@ -268,6 +281,7 @@ int read(int fd, void *buffer, unsigned size){
         return -1;
 		
     struct file *file = process_get_file_by_fd(fd);
+	check_address_writable(buffer);
     if (file == NULL)
         return -1; // 해당 파일이 NULL이면 즉시 리턴.
 
@@ -293,91 +307,25 @@ int read(int fd, void *buffer, unsigned size){
 // 5. addr aline인있는 지 c
 void *mmap (void *addr, size_t length, int writable, int fd, off_t offset) 
 {
+	dprintfg("[mmap] routine start\n");
 	struct thread *curr = thread_current();
-    if (addr == NULL || addr != pg_round_down(addr) || length == 0)
-        return NULL;
-    if (!is_user_vaddr(addr))
-        return NULL;
-    if (fd <= 1)
-        return NULL;
+	if (addr == NULL || length == 0 || fd == 0 || fd == 1 || (uint64_t) addr % 4096 != 0 || spt_find_page(&curr->spt, addr)) {
+		dprintfg("[mmap] failing mmap\n");
+		return NULL;
+	}
 
-    struct file *file = process_get_file_by_fd(fd);
-    if (file == NULL)
-        return NULL;
+	struct file *file = process_get_file_by_fd(fd);
 
-		if (offset % PGSIZE != 0)
-        return NULL;
+	dprintfg("[mmap] running do_mmap\n");
+	void *upage = do_mmap(addr, length, writable, file, offset);
+	
+	close(fd);
 
-    size_t page_cnt = DIV_ROUND_UP(length, PGSIZE);
-    void *kaddr = palloc_get_multiple(PAL_USER, page_cnt);
-    if (kaddr == NULL)
-        return NULL;
-
-    off_t ofs = offset;
-    size_t read_bytes = length;
-    uint8_t *up = addr;
-    uint8_t *kp = kaddr;
-    for (size_t i = 0; i < page_cnt; i++, up += PGSIZE, kp += PGSIZE, ofs += PGSIZE)
-    {
-        size_t page_read_bytes = read_bytes >= PGSIZE ? PGSIZE : read_bytes;
-        size_t page_zero_bytes = PGSIZE - page_read_bytes;
-        if (pml4_get_page(curr->pml4, up) != NULL ||
-            !pml4_set_page(curr->pml4, up, kp, writable))
-        {
-            palloc_free_multiple(kaddr, page_cnt);
-            return NULL;
-        }
-        file_read_at(file, kp, page_read_bytes, ofs);
-        memset(kp + page_read_bytes, 0, page_zero_bytes);
-        read_bytes -= page_read_bytes;
-    }
-
-    struct mmap_file *mf = malloc(sizeof *mf);
-    if (!mf) {
-        palloc_free_multiple(kaddr, page_cnt);
-        return NULL;
-    }
-    mf->addr = addr;
-    mf->length = page_cnt * PGSIZE;
-    mf->file = file_reopen(file);
-    mf->offset = offset;
-    mf->kaddr = kaddr;
-    list_push_back(&curr->mmap_list, &mf->elem);
-    return addr;
-
+	return upage;
 }
 
-void munmap(void *addr)
-{
-    struct thread *t = thread_current();
-    struct mmap_file *mf = NULL;
-    for (struct list_elem *e = list_begin(&t->mmap_list); e != list_end(&t->mmap_list); e = list_next(e))
-    {
-        struct mmap_file *m = list_entry(e, struct mmap_file, elem);
-        if (m->addr == addr)
-        {
-            mf = m;
-            break;
-        }
-    }
-    if (mf == NULL)
-        return;
-
-    size_t page_cnt = mf->length / PGSIZE;
-    uint8_t *up = mf->addr;
-    uint8_t *kp = mf->kaddr;
-    off_t ofs = mf->offset;
-    for (size_t i = 0; i < page_cnt; i++, up += PGSIZE, kp += PGSIZE, ofs += PGSIZE)
-    {
-        if (pml4_is_dirty(t->pml4, up))
-            file_write_at(mf->file, kp, PGSIZE, ofs);
-        pml4_clear_page(t->pml4, up);
-    }
-
-    file_close(mf->file);
-    palloc_free_multiple(mf->kaddr, page_cnt);
-    list_remove(&mf->elem);
-    free(mf);
+void munmap(void *addr){
+	do_munmap(addr);
 }
 
 
@@ -398,7 +346,6 @@ void syscall_init (void) {
 /* The main system call interface */
 void syscall_handler (struct intr_frame *f UNUSED) {
 	int sys_call_number = (int) f->R.rax; // 시스템 콜 번호 받아옴
-
 	/*
 	 x86-64 규약은 함수가 리턴하는 값을 "rax 레지스터"에 담음. 다른 인자들은 rdi, rsi 등 다른 레지스터로 전달.
 	 시스템 콜들 중 값 반환이 필요한 것은, struct intr_frame의 rax 멤버 수정을 통해 구현
@@ -434,7 +381,7 @@ void syscall_handler (struct intr_frame *f UNUSED) {
 			break;
 		case SYS_OPEN:
 			// printf("SYS_OPEN [%d]", sys_call_number);
-    		f->R.rax = open((const char *)f->R.rdi);
+    		f->R.rax = open(f->R.rdi);
 			break;
 		case SYS_FILESIZE:
 			// printf("SYS_FILESIZE [%d]", sys_call_number);
@@ -465,6 +412,7 @@ void syscall_handler (struct intr_frame *f UNUSED) {
 			break;
 		case SYS_MUNMAP:
 			munmap(f->R.rdi);
+			break;
 		default:
 			printf("FATAL: UNDEFINED SYSTEM CALL!, %d", sys_call_number);
 			exit(-1);

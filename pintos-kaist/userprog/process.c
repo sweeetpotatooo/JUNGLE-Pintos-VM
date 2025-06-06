@@ -917,6 +917,7 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 
 		// uninit page 생성.
 		// HACK: LLM은 VM_FILE을 써야 한다고 주장.
+		dprintfg("[loag_segment] upage: %p\n", upage);
 		if (!vm_alloc_page_with_initializer(VM_ANON, upage,
 											writable, lazy_load_segment, aux)) // uninit 페이지를 만들고 익명 페이지로 쓰겠다고 예약
 		{
