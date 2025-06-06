@@ -42,7 +42,7 @@ void check_address(const uint64_t *addr);
  */
 void check_address(const uint64_t *addr){
 	struct thread *cur = thread_current();
-	dprintfg("[check_address] routine start\n"); 
+	dprintfg("[check_address] routine start: %p\n", addr); 
 	if (addr == NULL || !(is_user_vaddr(addr))) {
 		dprintfg("[check_address] check failed!\n");
 		exit(-1);
@@ -187,7 +187,7 @@ bool remove(const char *file) {
  * @param file: 오픈할 파일.
  */
 int open(const char *filename) {
-	dprintfg("[open] routine start\n");
+	dprintfg("[open] routine start. filename: %p\n", filename);
 	check_address(filename); // 이상한 포인터면 즉시 종료
 	dprintfg("[open] validation complete\n");
 	struct file *file_obj = filesys_open(filename);
@@ -299,8 +299,7 @@ void *mmap (void *addr, size_t length, int writable, int fd, off_t offset)
 		return NULL;
 	}
 
-	dprintfg("[mmap] openning file\n");
-	struct file *file = open(curr->fd_table[fd]); 
+	struct file *file = process_get_file_by_fd(fd);
 
 	dprintfg("[mmap] running do_mmap\n");
 	void *upage = do_mmap(addr, length, writable, file, offset);
@@ -367,7 +366,7 @@ void syscall_handler (struct intr_frame *f UNUSED) {
 			break;
 		case SYS_OPEN:
 			// printf("SYS_OPEN [%d]", sys_call_number);
-    		f->R.rax = open((const char *)f->R.rdi);
+    		f->R.rax = open(f->R.rdi);
 			break;
 		case SYS_FILESIZE:
 			// printf("SYS_FILESIZE [%d]", sys_call_number);

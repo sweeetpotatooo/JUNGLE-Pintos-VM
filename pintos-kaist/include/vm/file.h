@@ -10,6 +10,7 @@ struct file_page {
 	struct file *file;
 	off_t size;
 	off_t file_ofs;
+	size_t cnt;
 };
 
 struct lazy_aux_file_backed {
@@ -17,6 +18,7 @@ struct lazy_aux_file_backed {
 	int writable;
 	struct file *file;
 	off_t offset;
+	size_t cnt;
 };
 
 void vm_file_init (void);
