@@ -597,8 +597,9 @@ init_thread (struct thread *t, const char *name, int priority) {
 	sema_init(&t->load_sema, 0);
 	sema_init(&t->exit_sema, 0);
 	sema_init(&t->wait_sema, 0);
-	list_init(&(t->child_list));
-	// ~ project 2. user programs
+        list_init(&(t->child_list));
+        list_init(&(t->mmap_list));
+        // ~ project 2. user programs
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

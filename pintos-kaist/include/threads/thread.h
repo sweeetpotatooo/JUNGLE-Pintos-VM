@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include "threads/interrupt.h"
 #include "threads/synch.h" // Project 2. User Programs 구현
+#include "filesys/file.h"
 
 #ifdef VM
 #include "vm/vm.h"
@@ -35,6 +36,16 @@ typedef int tid_t;
 #define FDT_PAGES 2                       // FDT 할당을 위한 페이지수. (thread_create, process_exit 등)
 #define FDCOUNT_LIMIT FDT_PAGES*(1 << 7)  // FD의 idx를 제한. 동료 리뷰 결과 보통 256-1536 정도의 값을 잡는 듯. 그러나 32 같은 적은 수에서도 multi-oom이 통과되어야 정상.
 /*-- Project 2. User Programs 과제. --*/
+
+/* Information for a single memory mapped file. */
+struct mmap_file {
+    void *addr;              /* Start address of mapping. */
+    size_t length;           /* Length in bytes (rounded up to pages). */
+    struct file *file;       /* File that is mapped. */
+    off_t offset;            /* Offset within file. */
+    void *kaddr;             /* Kernel address of mapped region. */
+    struct list_elem elem;   /* List element for thread's mmap_list. */
+};
 
 /* A kernel thread or user process.
  *
@@ -141,8 +152,10 @@ struct thread {
 	struct semaphore exit_sema; // 자식 프로세스가 종료되었음을 부모가 확인할 수 있도록 하기 위한 세마포어
 	struct semaphore wait_sema; // 부모가 자식의 종료를 기다릴 수 있도록 하기 위한 세마포어
  
-	struct file *running; // 현재 실행 중인 파일
-	/*-- Project 2. User Programs 과제 --*/
+        struct file *running; // 현재 실행 중인 파일
+        /* List of memory mapped files. */
+        struct list mmap_list;
+        /*-- Project 2. User Programs 과제 --*/
 };
 
 /* If false (default), use round-robin scheduler.

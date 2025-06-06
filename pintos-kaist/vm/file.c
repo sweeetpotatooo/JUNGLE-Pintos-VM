@@ -5,11 +5,12 @@
 #include "threads/malloc.h"
 #include "threads/vaddr.h"
 #include "threads/mmu.h"
+#include <string.h>
 
 static bool file_backed_swap_in(struct page *page, void *kva);
 static bool file_backed_swap_out(struct page *page);
 static void file_backed_destroy(struct page *page);
-boollazy_load_file_backed(struct page *page, void *aux);
+bool lazy_load_file_backed(struct page *page, void *aux);
 /* DO NOT MODIFY this struct */
 static const struct page_operations file_ops = {
 	.swap_in = file_backed_swap_in,
@@ -39,22 +40,26 @@ bool file_backed_initializer(struct page *page, enum vm_type type, void *kva)
 	// file_page 멤버 초기화.
 	file_page->file = NULL;
 	file_page->file_ofs  = 0;
-	file_page->size = 0;
+        file_page->size = 0;
+        return true;
 }
 
 /* Swap in the page by read contents from the file. */
 static bool
 file_backed_swap_in(struct page *page, void *kva)
 {
-	PANIC("filebacked swap in"); // 분명히 호출히 호출돼야 하잖아.
-	struct file_page *file_page UNUSED = &page->file;
+        struct file_page *file_page = &page->file;
+        if (file_read_at(file_page->file, kva, file_page->size, file_page->file_ofs) != (int)file_page->size)
+                return false;
+        return true;
 }
 
 /* Swap out the page by writeback contents to the file. */
 static bool
 file_backed_swap_out(struct page *page)
 {
-	struct file_page *file_page UNUSED = &page->file;
+        struct file_page *file_page UNUSED = &page->file;
+        return true;
 }
 
 /* Destory the file backed page. PAGE will be freed by the caller. */
