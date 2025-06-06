@@ -1,3 +1,12 @@
+pass tests/userprog/fork-boundary
+pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/userprog/exec-once:exec-once -p tests/userprog/child-simple:child-simple --swap-disk=4 -- -q   -f run exec-once < /dev/null 2> tests/userprog/exec-once.errors > tests/userprog/exec-once.output
+perl -I../.. ../../tests/userprog/exec-once.ck tests/userprog/exec-once tests/userprog/exec-once.result
+pass tests/userprog/exec-once
+pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/userprog/exec-arg:exec-arg -p tests/userprog/child-args:child-args --swap-disk=4 -- -q   -f run exec-arg < /dev/null 2> tests/userprog/exec-arg.errors > tests/userprog/exec-arg.output
+perl -I../.. ../../tests/userprog/exec-arg.ck tests/userprog/exec-arg tests/userprog/exec-arg.result
+pass tests/userprog/exec-arg
+pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/userprog/exec-boundary:exec-boundary -p tests/userprog/child-simple:child-simple --swap-disk=4 -- -q   -f run exec-boundary < /dev/null 2> tests/userprog/exec-boundary.errors > tests/userprog/exec-boundary.output
+perl -I../.. ../../tests/userprog/exec-boundary.ck tests/userprog/exec-boundary tests/userprog/exec-boundary.result
 pass tests/userprog/exec-boundary
 pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/userprog/exec-missing:exec-missing --swap-disk=4 -- -q   -f run exec-missing < /dev/null 2> tests/userprog/exec-missing.errors > tests/userprog/exec-missing.output
 perl -I../.. ../../tests/userprog/exec-missing.ck tests/userprog/exec-missing tests/userprog/exec-missing.result
@@ -70,19 +79,7 @@ perl -I../.. ../../tests/vm/pt-bad-read.ck tests/vm/pt-bad-read tests/vm/pt-bad-
 pass tests/vm/pt-bad-read
 pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/vm/pt-write-code:pt-write-code --swap-disk=4 -- -q   -f run pt-write-code < /dev/null 2> tests/vm/pt-write-code.errors > tests/vm/pt-write-code.output
 perl -I../.. ../../tests/vm/pt-write-code.ck tests/vm/pt-write-code tests/vm/pt-write-code.result
-FAIL tests/vm/pt-write-code
-Kernel panic in run: PANIC at ../../vm/anon.c:54 in anon_swap_in(): anon swap in
-Call stack: 0x800421802a 0x8004221800 0x8004221376 0x800422115a 0x800421cdee 0x800420900d 0x800420942b 0x400bca 0x400c13
-Translation of call stack:
-0x000000800421802a: debug_panic (lib/kernel/debug.c:32)
-0x0000008004221800: anon_swap_out (vm/anon.c:61)
-0x0000008004221376: vm_do_claim_page (vm/vm.c:427)
-0x000000800422115a: vm_try_handle_fault (vm/vm.c:360)
-0x000000800421cdee: page_fault (userprog/exception.c:149)
-0x000000800420900d: intr_handler (threads/interrupt.c:352)
-0x000000800420942b: intr_entry (threads/intr-stubs.o:?)
-0x0000000000400bca: (unknown)
-0x0000000000400c13: (unknown)
+pass tests/vm/pt-write-code
 pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/vm/pt-write-code2:pt-write-code2 -p ../../tests/vm/sample.txt:sample.txt --swap-disk=4 -- -q   -f run pt-write-code2 < /dev/null 2> tests/vm/pt-write-code2.errors > tests/vm/pt-write-code2.output
 perl -I../.. ../../tests/vm/pt-write-code2.ck tests/vm/pt-write-code2 tests/vm/pt-write-code2.result
 pass tests/vm/pt-write-code2
@@ -190,7 +187,7 @@ Differences in `diff -u' format:
 dd if=/dev/zero of=tests/vm/zeros bs=1024 count=6
 6+0 records in
 6+0 records out
-6144 bytes (6.1 kB, 6.0 KiB) copied, 0.00496221 s, 1.2 MB/s
+6144 bytes (6.1 kB, 6.0 KiB) copied, 0.00470942 s, 1.3 MB/s
 pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/vm/mmap-overlap:mmap-overlap -p tests/vm/zeros:zeros --swap-disk=4 -- -q   -f run mmap-overlap < /dev/null 2> tests/vm/mmap-overlap.errors > tests/vm/mmap-overlap.output
 perl -I../.. ../../tests/vm/mmap-overlap.ck tests/vm/mmap-overlap tests/vm/mmap-overlap.result
 FAIL tests/vm/mmap-overlap
@@ -863,7 +860,7 @@ pass tests/vm/pt-grow-bad
 pass tests/vm/pt-big-stk-obj
 pass tests/vm/pt-bad-addr
 pass tests/vm/pt-bad-read
-FAIL tests/vm/pt-write-code
+pass tests/vm/pt-write-code
 pass tests/vm/pt-write-code2
 FAIL tests/vm/pt-grow-stk-sc
 pass tests/vm/page-linear
@@ -936,7 +933,7 @@ pass tests/threads/priority-sema
 pass tests/threads/priority-condvar
 pass tests/threads/priority-donate-chain
 FAIL tests/vm/cow/cow-simple
-24 of 141 tests failed.
+23 of 141 tests failed.
 ../../tests/Make.tests:28: recipe for target 'check' failed
 make[1]: *** [check] Error 1
 make[1]: Leaving directory '/workspaces/JUNGLE-Pintos-VM2/pintos-kaist/vm/build'

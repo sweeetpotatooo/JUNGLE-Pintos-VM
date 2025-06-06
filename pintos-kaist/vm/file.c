@@ -96,7 +96,7 @@ do_mmap(void *addr, size_t length, int writable, struct file *file, off_t offset
 	size_t file_zero_bytes = PGSIZE - (file_read_bytes % PGSIZE);
 
 	void *original_addr = addr;
-
+	int iter = 0;
 	for (off_t current_off = offset; file_read_bytes > 0; )
 	{
 		size_t page_read_bytes = file_read_bytes > PGSIZE ? PGSIZE : file_read_bytes;
@@ -107,8 +107,15 @@ do_mmap(void *addr, size_t length, int writable, struct file *file, off_t offset
 		aux->offset = current_off;
 		dprintfg("[do_mmap] allocating page with aux. 1. length should be equal except last one. 2. offset must incremental\n");
 		dprintfg("[do_mmap] aux->length: %d, aux->offset: %d \n", aux->length, aux->offset);
+		enum vm_type type = VM_FILE;
+		
+		if (iter == 0)
+		{
+			type |= VM_FILE_FIRST;
+		}
+		iter += 1;
 
-		if (!vm_alloc_page_with_initializer(VM_FILE, addr, writable, lazy_load_file_backed, aux))
+		if (!vm_alloc_page_with_initializer(type, addr, writable, lazy_load_file_backed, aux))
 		{
 			dprintfg("[do_mmap] failed. returning NULL\n");
 			return NULL;
@@ -160,7 +167,14 @@ void do_munmap(void *addr)
 	// 파일 close, remove는 매핑에 반영되지 않음( 프레임은 가마니)
 	// 한 파일을 여러번 mmap하는 경우에는 file_reopen을 통해 독립된 참조. -> 하나의 file이 여러번 mmap 되어 있는 걸 어떻게 알지?
 
+	
 	struct supplemental_page_table *spt = &thread_current()-> spt; // 현재 스레드의 spt 정보 참조
 	struct page *page = spt_find_page(spt, addr); // spt정보를 가져온다.
+	if (page_get_type(page) != (VM_FILE | VM_FILE_FIRST))
+	{
+		// undefined action
+		exit(-1);
+	}
+	
 	file_backed_destroy(page);
 }
