@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include "threads/interrupt.h"
 #include "threads/synch.h" // Project 2. User Programs 구현
+#include "filesys/file.h"
 
 #ifdef VM
 #include "vm/vm.h"
@@ -93,6 +94,15 @@ typedef int tid_t;
  * only because they are mutually exclusive: only a thread in the
  * ready state is on the run queue, whereas only a thread in the
  * blocked state is on a semaphore wait list. */
+struct mmap_file {
+    void *addr;              /* Start address of mapping. */
+    size_t length;           /* Length in bytes (rounded up to pages). */
+    struct file *file;       /* File that is mapped. */
+    off_t offset;            /* Offset within file. */
+    void *kaddr;             /* Kernel address of mapped region. */
+    struct list_elem elem;   /* List element for thread's mmap_list. */
+};
+
 struct thread {
 	/* Owned by thread.c. */
 	tid_t tid;                          /* Thread identifier. */
@@ -143,6 +153,7 @@ struct thread {
  
 	struct file *running; // 현재 실행 중인 파일
 	/*-- Project 2. User Programs 과제 --*/
+	struct list mmap_list;
 };
 
 /* If false (default), use round-robin scheduler.

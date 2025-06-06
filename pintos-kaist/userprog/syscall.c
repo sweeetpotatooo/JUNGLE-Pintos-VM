@@ -13,6 +13,10 @@
 #include "threads/flags.h"
 #include "intrinsic.h"
 #include "vm/file.h"
+#include <string.h>
+#include "threads/mmu.h"
+#include <round.h>
+#include "list.h"
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
@@ -52,7 +56,7 @@ void check_address(const uint64_t *addr){
 }
 static void check_writable_address(const uint64_t *addr){
         struct thread *cur = thread_current();
-        check_address(addr);
+        //check_address(addr);
         struct page *page = spt_find_page(&cur->spt, addr);
         if(page == NULL || !page->writable)
                 exit(-1);
@@ -238,13 +242,16 @@ int filesize(int fd) {
  * @param size: 복사할 크기.
  */
 int read(int fd, void *buffer, unsigned size){
+			check_address(buffer);
+			check_address(buffer + size - 1); 
 	// 1. 주소 범위 검증
         dprintfe("[read] routine start. \n");
-        check_writable_address(buffer);
-        check_writable_address(buffer + size - 1);
+        // check_writable_address(buffer);
+        // check_writable_address(buffer + size - 1);
     if (size == 0)
         return 0;
     if (buffer == NULL || !is_user_vaddr(buffer))
+
         exit(-1);
 
     // 2. stdin (fd == 0)일 경우
@@ -259,11 +266,18 @@ int read(int fd, void *buffer, unsigned size){
     // 3. fd 범위 검사
     if (fd < 2 || fd >= FDCOUNT_LIMIT)
         return -1;
-
+		
     struct file *file = process_get_file_by_fd(fd);
     if (file == NULL)
         return -1; // 해당 파일이 NULL이면 즉시 리턴.
 
+		struct thread *cur = thread_current();
+      //check_address(addr);
+      struct page *page = spt_find_page(&cur->spt, buffer);
+      if(page == NULL || !page->writable) {
+				exit(-1);
+			}
+      
     // 4. 정상적인 파일이면 read
     off_t ret;
     lock_acquire(&filesys_lock);
@@ -280,25 +294,90 @@ int read(int fd, void *buffer, unsigned size){
 void *mmap (void *addr, size_t length, int writable, int fd, off_t offset) 
 {
 	struct thread *curr = thread_current();
-	if (addr == NULL || length == 0 || fd == 0 || fd == 1 || (uint64_t) addr % 4096 != 0 || spt_find_page(&curr->spt, addr)) {
-		return NULL;
-	}
-	sema_down(&filesys_lock);
-	struct file *file = open(curr->fd_table[fd]); 
-	sema_up(&filesys_lock);
-	
-	void *upage = do_mmap(addr, length, writable, file, offset);
-	
-	sema_down(&filesys_lock);
-	close(fd);
-	sema_up(&filesys_lock);
-	
+    if (addr == NULL || addr != pg_round_down(addr) || length == 0)
+        return NULL;
+    if (!is_user_vaddr(addr))
+        return NULL;
+    if (fd <= 1)
+        return NULL;
 
-	return upage;
+    struct file *file = process_get_file_by_fd(fd);
+    if (file == NULL)
+        return NULL;
+
+		if (offset % PGSIZE != 0)
+        return NULL;
+
+    size_t page_cnt = DIV_ROUND_UP(length, PGSIZE);
+    void *kaddr = palloc_get_multiple(PAL_USER, page_cnt);
+    if (kaddr == NULL)
+        return NULL;
+
+    off_t ofs = offset;
+    size_t read_bytes = length;
+    uint8_t *up = addr;
+    uint8_t *kp = kaddr;
+    for (size_t i = 0; i < page_cnt; i++, up += PGSIZE, kp += PGSIZE, ofs += PGSIZE)
+    {
+        size_t page_read_bytes = read_bytes >= PGSIZE ? PGSIZE : read_bytes;
+        size_t page_zero_bytes = PGSIZE - page_read_bytes;
+        if (pml4_get_page(curr->pml4, up) != NULL ||
+            !pml4_set_page(curr->pml4, up, kp, writable))
+        {
+            palloc_free_multiple(kaddr, page_cnt);
+            return NULL;
+        }
+        file_read_at(file, kp, page_read_bytes, ofs);
+        memset(kp + page_read_bytes, 0, page_zero_bytes);
+        read_bytes -= page_read_bytes;
+    }
+
+    struct mmap_file *mf = malloc(sizeof *mf);
+    if (!mf) {
+        palloc_free_multiple(kaddr, page_cnt);
+        return NULL;
+    }
+    mf->addr = addr;
+    mf->length = page_cnt * PGSIZE;
+    mf->file = file_reopen(file);
+    mf->offset = offset;
+    mf->kaddr = kaddr;
+    list_push_back(&curr->mmap_list, &mf->elem);
+    return addr;
+
 }
 
-void munmap(void *addr){
-	do_munmap(addr);
+void munmap(void *addr)
+{
+    struct thread *t = thread_current();
+    struct mmap_file *mf = NULL;
+    for (struct list_elem *e = list_begin(&t->mmap_list); e != list_end(&t->mmap_list); e = list_next(e))
+    {
+        struct mmap_file *m = list_entry(e, struct mmap_file, elem);
+        if (m->addr == addr)
+        {
+            mf = m;
+            break;
+        }
+    }
+    if (mf == NULL)
+        return;
+
+    size_t page_cnt = mf->length / PGSIZE;
+    uint8_t *up = mf->addr;
+    uint8_t *kp = mf->kaddr;
+    off_t ofs = mf->offset;
+    for (size_t i = 0; i < page_cnt; i++, up += PGSIZE, kp += PGSIZE, ofs += PGSIZE)
+    {
+        if (pml4_is_dirty(t->pml4, up))
+            file_write_at(mf->file, kp, PGSIZE, ofs);
+        pml4_clear_page(t->pml4, up);
+    }
+
+    file_close(mf->file);
+    palloc_free_multiple(mf->kaddr, page_cnt);
+    list_remove(&mf->elem);
+    free(mf);
 }
 
 
