@@ -94,6 +94,11 @@ void *
 do_mmap(void *addr, size_t length, int writable, struct file *file, off_t offset)
 {
 	dprintfg("[do_mmap] routine start\n");
+	// addr 의 페이지가 이미 VM_FILE인지 점검.
+	if(page_get_type(spt_find_page(&thread_current()->spt, addr))== VM_FILE)
+	{
+		return NULL;
+	}
 	struct file *re_file = file_reopen(file);
 	size_t filesize = file_length(file);
 	size_t file_read_bytes = filesize < length ? filesize : length;
