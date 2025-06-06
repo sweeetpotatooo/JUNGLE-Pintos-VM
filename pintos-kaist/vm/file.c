@@ -89,39 +89,38 @@ file_backed_destroy(struct page *page)
 void *
 do_mmap(void *addr, size_t length, int writable, struct file *file, off_t offset)
 {
-	// bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writable, vm_initializer *init, void *aux)
-	struct lazy_aux_file_backed *aux;
+	dprintfg("[do_mmap] routine start\n");
+	struct file *re_file = file_reopen(file);
+	size_t filesize = file_length(file);
+	size_t file_read_bytes = filesize < length ? filesize : length;
+	size_t file_zero_bytes = PGSIZE - (file_read_bytes % PGSIZE);
 
-	while (length > 0)
+	void *original_addr = addr;
+
+	for (off_t current_off = offset; file_read_bytes > 0; )
 	{
-		aux = malloc(sizeof(struct lazy_aux_file_backed));
-		aux->file = file_reopen(file);
-		aux->writable = writable;
-
-		if (length > PGSIZE)
-			aux->length = PGSIZE;
-		else
-			aux->length = length;
-
-		aux->offset = offset;
+		size_t page_read_bytes = file_read_bytes > PGSIZE ? PGSIZE : file_read_bytes;
+		size_t page_zero_bytes = PGSIZE - page_read_bytes;
+		struct lazy_aux_file_backed *aux = malloc(sizeof(struct lazy_aux_file_backed));
+		aux->file = re_file;
+		aux->length = page_read_bytes;
+		aux->offset = current_off;
+		dprintfg("[do_mmap] allocating page with aux. 1. length should be equal except last one. 2. offset must incremental\n");
+		dprintfg("[do_mmap] aux->length: %d, aux->offset: %d \n", aux->length, aux->offset);
 
 		if (!vm_alloc_page_with_initializer(VM_FILE, addr, writable, lazy_load_file_backed, aux))
 		{
-			free(aux);
+			dprintfg("[do_mmap] failed. returning NULL\n");
 			return NULL;
 		}
-		// 쓴 만큼 offset, length 업데이트.
-		offset += aux->length;
-		length -= aux->length;
-		// addr = (void *)((char *) addr +  PGSIZE);
+		current_off += page_read_bytes;
+		addr += PGSIZE;
+		file_read_bytes -= page_read_bytes;
+		file_zero_bytes -= page_zero_bytes;
+
 	}
-
-	// 1. addr로부터 페이지 생성
-	// 1-1. lazy_load, aux 초기화해서 넘겨주기.
-	// 1-2. 복사(length, offset, 등등) 이거 바로 해줘요? 그럼 또 lazy 아니잖아. -> 이 내용이 lazy_load에서 타입 체크후에 복사 바로 하면 되지 않겠나.
-	// 1-3. 나머자 내용은 0으로 채워야 함.
-
-	return addr;
+	dprintfg("[do_mmap] success. returning original addr\n");
+	return original_addr;
 }
 
 bool lazy_load_file_backed(struct page *page, void *aux)
@@ -156,7 +155,7 @@ void do_munmap(void *addr)
 {
 	// 프로세스가 종료되면 매핑 자동해제. munmap할 필요는 없음.
 	// 매핑 해제 시 수정된 페이지는 파일에 반영
-	// 수정되지 않은 페이지는 반영할 필요 없음
+	// 수정되지 않은 페이지는 반영할 필요 ㄹ없음
 	// munmap 하고 spt제거?
 	// 파일 close, remove는 매핑에 반영되지 않음( 프레임은 가마니)
 	// 한 파일을 여러번 mmap하는 경우에는 file_reopen을 통해 독립된 참조. -> 하나의 file이 여러번 mmap 되어 있는 걸 어떻게 알지?

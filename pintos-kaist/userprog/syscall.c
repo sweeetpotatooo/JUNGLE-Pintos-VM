@@ -42,13 +42,23 @@ void check_address(const uint64_t *addr);
  */
 void check_address(const uint64_t *addr){
 	struct thread *cur = thread_current();
-	dprintfe("[check_address] routine start\n");
-	if (addr == NULL || !(is_user_vaddr(addr)) ||!spt_find_page(&cur->spt, addr)) 
+	dprintfg("[check_address] routine start\n"); 
+	if (addr == NULL || !(is_user_vaddr(addr))) {
+		dprintfg("[check_address] check failed!\n");
 		exit(-1);
-	if(pml4_get_page(cur->pml4, addr) == NULL) dprintfe("[check_address] addr not in pml4\n");
-	dprintfe("[check_address] check pass!\n");
-
+	}
+	dprintfg("[check_address] check pass!\n");
 }
+
+void check_address_writable(const uint64_t *addr)
+{
+	struct page *page = spt_find_page(&thread_current()->spt, addr);
+	if (!page->writable)
+	{
+		exit(-1);
+	}
+}
+
 
 /**
  * halt - 머신을 halt함.
@@ -177,7 +187,9 @@ bool remove(const char *file) {
  * @param file: 오픈할 파일.
  */
 int open(const char *filename) {
+	dprintfg("[open] routine start\n");
 	check_address(filename); // 이상한 포인터면 즉시 종료
+	dprintfg("[open] validation complete\n");
 	struct file *file_obj = filesys_open(filename);
 	
 	if (file_obj == NULL) {
@@ -185,11 +197,14 @@ int open(const char *filename) {
 	}
 
 	int fd = process_add_file(file_obj);
+	dprintfg("[open] process add file done\n");
 
 	if (fd == -1) { // fd table 꽉찬 경우 그냥 닫아버림
+		dprintfg("[open] failed\n");
 		file_close(file_obj);
     	file_obj = NULL;
 	}
+	dprintfg("[open] success\n");
 	
 	return fd;
 }
@@ -235,6 +250,10 @@ int read(int fd, void *buffer, unsigned size){
 	dprintfe("[read] routine start. \n");
 	check_address(buffer);
     check_address(buffer + size-1); 
+	if(!(spt_find_page(&thread_current()->spt, buffer)->writable))
+	{
+		exit(-1);
+	}
     if (size == 0)
         return 0;
     if (buffer == NULL || !is_user_vaddr(buffer))
@@ -254,6 +273,7 @@ int read(int fd, void *buffer, unsigned size){
         return -1;
 
     struct file *file = process_get_file_by_fd(fd);
+	check_address_writable(buffer);
     if (file == NULL)
         return -1; // 해당 파일이 NULL이면 즉시 리턴.
 
@@ -272,20 +292,20 @@ int read(int fd, void *buffer, unsigned size){
 // 5. addr aline인있는 지 c
 void *mmap (void *addr, size_t length, int writable, int fd, off_t offset) 
 {
+	dprintfg("[mmap] routine start\n");
 	struct thread *curr = thread_current();
 	if (addr == NULL || length == 0 || fd == 0 || fd == 1 || (uint64_t) addr % 4096 != 0 || spt_find_page(&curr->spt, addr)) {
+		dprintfg("[mmap] failing mmap\n");
 		return NULL;
 	}
-	sema_down(&filesys_lock);
+
+	dprintfg("[mmap] openning file\n");
 	struct file *file = open(curr->fd_table[fd]); 
-	sema_up(&filesys_lock);
-	
+
+	dprintfg("[mmap] running do_mmap\n");
 	void *upage = do_mmap(addr, length, writable, file, offset);
 	
-	sema_down(&filesys_lock);
 	close(fd);
-	sema_up(&filesys_lock);
-	
 
 	return upage;
 }
@@ -312,7 +332,6 @@ void syscall_init (void) {
 /* The main system call interface */
 void syscall_handler (struct intr_frame *f UNUSED) {
 	int sys_call_number = (int) f->R.rax; // 시스템 콜 번호 받아옴
-
 	/*
 	 x86-64 규약은 함수가 리턴하는 값을 "rax 레지스터"에 담음. 다른 인자들은 rdi, rsi 등 다른 레지스터로 전달.
 	 시스템 콜들 중 값 반환이 필요한 것은, struct intr_frame의 rax 멤버 수정을 통해 구현
@@ -379,6 +398,7 @@ void syscall_handler (struct intr_frame *f UNUSED) {
 			break;
 		case SYS_MUNMAP:
 			munmap(f->R.rdi);
+			break;
 		default:
 			printf("FATAL: UNDEFINED SYSTEM CALL!, %d", sys_call_number);
 			exit(-1);
