@@ -469,39 +469,62 @@ spt_destroy_page_in_copy_failure(struct hash_elem *e, void *aux UNUSED)
 	vm_dealloc_page(p);
 }
 
-bool supplemental_page_table_copy(struct supplemental_page_table *dst,
-								  struct supplemental_page_table *src)
+bool
+supplemental_page_table_copy (struct supplemental_page_table *dst,
+                              struct supplemental_page_table *src)
 {
-	struct hash_iterator i;
-	hash_first(&i, &src->hash);
+    struct hash_iterator i;
+    hash_first (&i, &src->hash);
 
-	while (hash_next(&i))
-	{
-		struct page *src_page = hash_entry(hash_cur(&i), struct page, hash_elem);
-		enum vm_type type = page_get_type(src_page);
-		void *upage = src_page->va;
+    while (hash_next (&i)) {
+        struct page *src_page = hash_entry (hash_cur (&i), struct page, hash_elem);
+        enum vm_type type     = page_get_type (src_page);
+        void *upage           = src_page->va;
+        bool writable         = src_page->writable;
 
-		// 1. 새로운 페이지를 dst SPT에 할당
-		if (!vm_alloc_page_with_initializer(type, upage, src_page->writable,
-											src_page->uninit.init, src_page->uninit.aux))
-		{
-			return false;
-		}
+        if (type == VM_UNINIT) {
+            vm_initializer *init = src_page->uninit.init;
+            void *aux            = src_page->uninit.aux;
+            if (!vm_alloc_page_with_initializer (src_page->uninit.type,
+                                                 upage, writable, init, aux))
+                return false;
+            continue;
+        }
 
-		// 2. 새로 할당된 페이지를 찾고 claim
-		struct page *dst_page = spt_find_page(dst, upage);
-		if (!vm_claim_page(upage))
-		{
-			return false;
-		}
+        if (type == VM_FILE) {
+            struct lazy_aux_file_backed *aux = malloc (sizeof *aux);
+            if (aux == NULL) return false;
 
-		// 3. 부모의 프레임이 존재하면, 자식의 프레임으로 데이터 복사
-		if (src_page->frame != NULL)
-		{
-			memcpy(dst_page->frame->kva, src_page->frame->kva, PGSIZE);
-		}
-	}
-	return true;
+            aux->length   = src_page->file.cnt;            /* 실제로 읽어올 바이트 수   */
+            aux->writable = writable;
+            aux->file     = file_reopen (src_page->file.file);
+            aux->offset   = src_page->file.file_ofs;       /* 파일 내 오프셋            */
+            aux->cnt      = src_page->file.cnt;            /* 페이지 내 유효 바이트 수   */
+
+            if (!vm_alloc_page_with_initializer (VM_FILE, upage,
+                                                 writable,
+                                                 lazy_load_file_backed, aux)) {
+                free (aux);
+                return false;
+            }
+        }
+
+        if (type == VM_ANON) {
+            if (!vm_alloc_page_with_initializer (VM_ANON, upage,
+                                                 writable,
+                                                 NULL, NULL))
+                return false;
+        }
+
+        struct page *dst_page = spt_find_page (dst, upage);
+        if (!vm_claim_page (upage))
+            return false;
+
+        if (src_page->frame != NULL) {
+            memcpy (dst_page->frame->kva, src_page->frame->kva, PGSIZE);
+        }
+    }
+    return true;
 }
 
 /* supplemental page table이 가지고 있는 리소스를 해제합니다. */

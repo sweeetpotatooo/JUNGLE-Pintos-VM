@@ -246,7 +246,7 @@ pass tests/vm/page-merge-seq
 pintos -v -k -T 600 -m 20   --fs-disk=10 -p tests/vm/page-merge-par:page-merge-par -p tests/vm/child-sort:child-sort --swap-disk=10 -- -q   -f run page-merge-par < /dev/null 2> tests/vm/page-merge-par.errors > tests/vm/page-merge-par.output
 perl -I../.. ../../tests/vm/page-merge-par.ck tests/vm/page-merge-par tests/vm/page-merge-par.result
 FAIL tests/vm/page-merge-par
-run: open "buf0": FAILED
+run: wait for child 4: FAILED
 pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/vm/page-merge-stk:page-merge-stk -p tests/vm/child-qsort:child-qsort --swap-disk=10 -- -q   -f run page-merge-stk < /dev/null 2> tests/vm/page-merge-stk.errors > tests/vm/page-merge-stk.output
 perl -I../.. ../../tests/vm/page-merge-stk.ck tests/vm/page-merge-stk tests/vm/page-merge-stk.result
 FAIL tests/vm/page-merge-stk
@@ -254,7 +254,7 @@ run: TIMEOUT
 pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/vm/page-merge-mm:page-merge-mm -p tests/vm/child-qsort-mm:child-qsort-mm --swap-disk=10 -- -q   -f run page-merge-mm < /dev/null 2> tests/vm/page-merge-mm.errors > tests/vm/page-merge-mm.output
 perl -I../.. ../../tests/vm/page-merge-mm.ck tests/vm/page-merge-mm tests/vm/page-merge-mm.result
 FAIL tests/vm/page-merge-mm
-run: open "buf0": FAILED
+run: wait for child 0: FAILED
 pintos -v -k -T 600 -m 20   --fs-disk=10 -p tests/vm/page-shuffle:page-shuffle --swap-disk=4 -- -q   -f run page-shuffle < /dev/null 2> tests/vm/page-shuffle.errors > tests/vm/page-shuffle.output
 perl -I../.. ../../tests/vm/page-shuffle.ck tests/vm/page-shuffle tests/vm/page-shuffle.result
 pass tests/vm/page-shuffle
@@ -270,18 +270,16 @@ pass tests/vm/mmap-unmap
 dd if=/dev/zero of=tests/vm/zeros bs=1024 count=6
 6+0 records in
 6+0 records out
-6144 bytes (6.1 kB, 6.0 KiB) copied, 0.00109065 s, 5.6 MB/s
+6144 bytes (6.1 kB, 6.0 KiB) copied, 0.00126338 s, 4.9 MB/s
 pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/vm/mmap-overlap:mmap-overlap -p tests/vm/zeros:zeros --swap-disk=4 -- -q   -f run mmap-overlap < /dev/null 2> tests/vm/mmap-overlap.errors > tests/vm/mmap-overlap.output
 perl -I../.. ../../tests/vm/mmap-overlap.ck tests/vm/mmap-overlap tests/vm/mmap-overlap.result
-FAIL tests/vm/mmap-overlap
-run: open "zeros" again: FAILED
+pass tests/vm/mmap-overlap
 pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/vm/mmap-twice:mmap-twice -p ../../tests/vm/sample.txt:sample.txt --swap-disk=4 -- -q   -f run mmap-twice < /dev/null 2> tests/vm/mmap-twice.errors > tests/vm/mmap-twice.output
 perl -I../.. ../../tests/vm/mmap-twice.ck tests/vm/mmap-twice tests/vm/mmap-twice.result
 pass tests/vm/mmap-twice
 pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/vm/mmap-write:mmap-write --swap-disk=4 -- -q   -f run mmap-write < /dev/null 2> tests/vm/mmap-write.errors > tests/vm/mmap-write.output
 perl -I../.. ../../tests/vm/mmap-write.ck tests/vm/mmap-write tests/vm/mmap-write.result
-FAIL tests/vm/mmap-write
-run: compare read data against written data: FAILED
+pass tests/vm/mmap-write
 pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/vm/mmap-ro:mmap-ro -p ../../tests/vm/large.txt:large.txt --swap-disk=4 -- -q   -f run mmap-ro < /dev/null 2> tests/vm/mmap-ro.errors > tests/vm/mmap-ro.output
 perl -I../.. ../../tests/vm/mmap-ro.ck tests/vm/mmap-ro tests/vm/mmap-ro.result
 pass tests/vm/mmap-ro
@@ -296,23 +294,10 @@ perl -I../.. ../../tests/vm/mmap-bad-fd.ck tests/vm/mmap-bad-fd tests/vm/mmap-ba
 pass tests/vm/mmap-bad-fd
 pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/vm/mmap-clean:mmap-clean -p ../../tests/vm/sample.txt:sample.txt --swap-disk=4 -- -q   -f run mmap-clean < /dev/null 2> tests/vm/mmap-clean.errors > tests/vm/mmap-clean.output
 perl -I../.. ../../tests/vm/mmap-clean.ck tests/vm/mmap-clean tests/vm/mmap-clean.result
-FAIL tests/vm/mmap-clean
-run: write "sample.txt": FAILED
+pass tests/vm/mmap-clean
 pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/vm/mmap-inherit:mmap-inherit -p ../../tests/vm/sample.txt:sample.txt -p tests/vm/child-inherit:child-inherit --swap-disk=4 -- -q   -f run mmap-inherit < /dev/null 2> tests/vm/mmap-inherit.errors > tests/vm/mmap-inherit.output
 perl -I../.. ../../tests/vm/mmap-inherit.ck tests/vm/mmap-inherit tests/vm/mmap-inherit.result
-FAIL tests/vm/mmap-inherit
-Kernel panic in run: PANIC at ../../userprog/exception.c:97 in kill(): Kernel bug - unexpected interrupt in kernel
-Call stack: 0x8004218043 0x800421cd68 0x8004209026 0x8004209444 0x80042214da 0x80042213a4 0x80042216b1 0x800421bb05 0x80042079b1
-Translation of call stack:
-0x0000008004218043: debug_panic (lib/kernel/debug.c:32)
-0x000000800421cd68: kill (userprog/exception.c:103)
-0x0000008004209026: intr_handler (threads/interrupt.c:352)
-0x0000008004209444: intr_entry (threads/intr-stubs.o:?)
-0x00000080042214da: vm_do_claim_page (vm/vm.c:442)
-0x00000080042213a4: vm_claim_page (vm/vm.c:402)
-0x00000080042216b1: supplemental_page_table_copy (vm/vm.c:494)
-0x000000800421bb05: __do_fork (userprog/process.c:254)
-0x00000080042079b1: kernel_thread (threads/thread.c:566)
+pass tests/vm/mmap-inherit
 pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/vm/mmap-misalign:mmap-misalign -p ../../tests/vm/sample.txt:sample.txt --swap-disk=4 -- -q   -f run mmap-misalign < /dev/null 2> tests/vm/mmap-misalign.errors > tests/vm/mmap-misalign.output
 perl -I../.. ../../tests/vm/mmap-misalign.ck tests/vm/mmap-misalign tests/vm/mmap-misalign.result
 pass tests/vm/mmap-misalign
@@ -345,8 +330,7 @@ perl -I../.. ../../tests/vm/mmap-zero-len.ck tests/vm/mmap-zero-len tests/vm/mma
 pass tests/vm/mmap-zero-len
 pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/vm/mmap-off:mmap-off -p ../../tests/vm/large.txt:large.txt --swap-disk=4 -- -q   -f run mmap-off < /dev/null 2> tests/vm/mmap-off.errors > tests/vm/mmap-off.output
 perl -I../.. ../../tests/vm/mmap-off.ck tests/vm/mmap-off tests/vm/mmap-off.result
-FAIL tests/vm/mmap-off
-run: validate fail.: FAILED
+pass tests/vm/mmap-off
 pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/vm/mmap-bad-off:mmap-bad-off -p ../../tests/vm/large.txt:large.txt --swap-disk=4 -- -q   -f run mmap-bad-off < /dev/null 2> tests/vm/mmap-bad-off.errors > tests/vm/mmap-bad-off.output
 perl -I../.. ../../tests/vm/mmap-bad-off.ck tests/vm/mmap-bad-off tests/vm/mmap-bad-off.result
 FAIL tests/vm/mmap-bad-off
@@ -669,15 +653,15 @@ pass tests/vm/page-shuffle
 pass tests/vm/mmap-read
 pass tests/vm/mmap-close
 pass tests/vm/mmap-unmap
-FAIL tests/vm/mmap-overlap
+pass tests/vm/mmap-overlap
 pass tests/vm/mmap-twice
-FAIL tests/vm/mmap-write
+pass tests/vm/mmap-write
 pass tests/vm/mmap-ro
 pass tests/vm/mmap-exit
 pass tests/vm/mmap-shuffle
 pass tests/vm/mmap-bad-fd
-FAIL tests/vm/mmap-clean
-FAIL tests/vm/mmap-inherit
+pass tests/vm/mmap-clean
+pass tests/vm/mmap-inherit
 pass tests/vm/mmap-misalign
 pass tests/vm/mmap-null
 pass tests/vm/mmap-over-code
@@ -688,7 +672,7 @@ pass tests/vm/mmap-zero
 pass tests/vm/mmap-bad-fd2
 pass tests/vm/mmap-bad-fd3
 pass tests/vm/mmap-zero-len
-FAIL tests/vm/mmap-off
+pass tests/vm/mmap-off
 FAIL tests/vm/mmap-bad-off
 FAIL tests/vm/mmap-kernel
 pass tests/vm/lazy-file
@@ -729,7 +713,7 @@ pass tests/threads/priority-sema
 pass tests/threads/priority-condvar
 pass tests/threads/priority-donate-chain
 FAIL tests/vm/cow/cow-simple
-15 of 141 tests failed.
+10 of 141 tests failed.
 ../../tests/Make.tests:28: recipe for target 'check' failed
 make[1]: *** [check] Error 1
 make[1]: Leaving directory '/workspaces/JUNGLE-Pintos-VM/pintos-kaist/vm/build'
