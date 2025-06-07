@@ -76,15 +76,15 @@ file_backed_destroy(struct page *page)
 	//    - spt_remove_page에서 구현하는것이 좋을듯하다
 	//   - write-back 구현
 	
-	struct file_page *file_page = &page->file; 
-	struct pml4 *pml4 = thread_current()->pml4;
-	struct supplemental_page_table *spt = &thread_current()->spt;
-	
-	if (pml4_is_dirty(pml4, page->va))
-	{
-		// write back
-		file_write_at(file_page->file, page->va, file_page->size, file_page->file_ofs); // Writes SIZE bytes만큼 쓴다.
-	}
+        struct file_page *file_page = &page->file;
+        struct pml4 *pml4 = thread_current()->pml4;
+
+        if (page->frame != NULL && pml4_is_dirty(pml4, page->va))
+        {
+                /* Write back modified data to the file. */
+                file_write_at(file_page->file, page->frame->kva,
+                              file_page->size, file_page->file_ofs);
+        }
 	
 	/* 
 	* DEBUG: spt_remove_page를 여기서 호출하면 중복이다. 위의 주석을 참조.
@@ -98,40 +98,63 @@ file_backed_destroy(struct page *page)
 void *
 do_mmap(void *addr, size_t length, int writable, struct file *file, off_t offset)
 {
-	dprintfg("[do_mmap] routine start\n");
-	struct file *re_file = file_reopen(file);
-	size_t filesize = file_length(file);
-	size_t file_read_bytes = filesize < length ? filesize : length;
-	size_t file_zero_bytes = PGSIZE - (file_read_bytes % PGSIZE);
+        dprintfg("[do_mmap] routine start\n");
 
-	void *original_addr = addr;
-	int iter = 0;
-	for (off_t current_off = offset; file_read_bytes > 0; )
-	{
-		size_t page_read_bytes = file_read_bytes > PGSIZE ? PGSIZE : file_read_bytes;
-		size_t page_zero_bytes = PGSIZE - page_read_bytes;
-		struct lazy_aux_file_backed *aux = malloc(sizeof(struct lazy_aux_file_backed));
-		aux->file = re_file;
-		aux->length = page_read_bytes;
-		aux->offset = current_off;
-		aux->cnt = iter++;
+        struct thread *curr = thread_current();
+        struct file *re_file = file_reopen(file);
+        if (re_file == NULL)
+                return NULL;
 
-		dprintfg("[do_mmap] allocating page with aux. 1. length should be equal except last one. 2. offset must incremental\n");
-		dprintfg("[do_mmap] aux->length: %d, aux->offset: %d \n", aux->length, aux->offset);
+        size_t read_bytes = length < file_length(file) ? length : file_length(file);
+        size_t zero_bytes = pg_round_up(length) - read_bytes;
 
-		if (!vm_alloc_page_with_initializer(VM_FILE, addr, writable, lazy_load_file_backed, aux))
-		{
-			dprintfg("[do_mmap] failed. returning NULL\n");
-			return NULL;
-		}
-		current_off += page_read_bytes;
-		addr += PGSIZE;
-		file_read_bytes -= page_read_bytes;
-		file_zero_bytes -= page_zero_bytes;
+        struct mmap_file *mf = malloc(sizeof(struct mmap_file));
+        if (mf == NULL)
+        {
+                file_close(re_file);
+                return NULL;
+        }
 
-	}
-	dprintfg("[do_mmap] success. returning original addr\n");
-	return original_addr;
+        mf->addr = addr;
+        mf->length = pg_round_up(length);
+        mf->file = re_file;
+        mf->offset = offset;
+        list_push_back(&curr->mmap_list, &mf->elem);
+
+        void *upage = addr;
+        off_t ofs = offset;
+
+        while (read_bytes > 0 || zero_bytes > 0)
+        {
+                size_t page_read_bytes = read_bytes > PGSIZE ? PGSIZE : read_bytes;
+                size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+                struct lazy_aux_file_backed *aux = malloc(sizeof(struct lazy_aux_file_backed));
+                if (aux == NULL)
+                        goto fail;
+
+                aux->file = re_file;
+                aux->length = page_read_bytes;
+                aux->offset = ofs;
+                aux->cnt = 0;
+
+                if (!vm_alloc_page_with_initializer(VM_FILE, upage, writable, lazy_load_file_backed, aux))
+                {
+                        free(aux);
+                        goto fail;
+                }
+
+                read_bytes -= page_read_bytes;
+                zero_bytes -= page_zero_bytes;
+                ofs += page_read_bytes;
+                upage += PGSIZE;
+        }
+
+        return addr;
+
+fail:
+        do_munmap(addr);
+        return NULL;
 }
 
 bool lazy_load_file_backed(struct page *page, void *aux)
@@ -165,36 +188,44 @@ bool lazy_load_file_backed(struct page *page, void *aux)
 /* Do the munmap */
 void do_munmap(void *addr)
 {
-	// 프로세스가 종료되면 매핑 자동해제. munmap할 필요는 없음.
-	// 매핑 해제 시 수정된 페이지는 파일에 반영
-	// 수정되지 않은 페이지는 반영할 필요 없음.
-	dprintfg("[do_munmap] routine start. va: %p\n", addr);
+    dprintfg("[do_munmap] routine start. va: %p\n", addr);
 
-	struct supplemental_page_table *spt = &thread_current()-> spt; // 현재 스레드의 spt 정보 참조
-	struct page *page = spt_find_page(spt, addr); // spt정보를 가져온다.
-		void *addr_buf = page->va;
-	struct file *file = page->file.file;
-	if (page->file.cnt != 0 || page_get_type(page) != VM_FILE)
-	{
-		// undefined action
-		dprintfg("[do_munmap] undefined action! expected type: %d, actual: %d\n", (VM_FILE | VM_FILE_FIRST) , page->uninit.type);
-		exit(-1);
-	}
+    struct thread *curr = thread_current();
+    struct supplemental_page_table *spt = &curr->spt;
+    struct mmap_file *target = NULL;
+    struct list_elem *e;
 
-	// 주소를 역으로 올라가며 페이지를 삭제.
-	// 또다른 시작 페이지를 만나면 정지.
-	while(page != NULL && page->uninit.type == VM_FILE)
-	{
-		dprintfg("[do_munmap] deleting page. va: %p\n", page->va);
-		addr_buf = page->va; // 페이지 구조체를 제거하기 전 주소 저장
-		file_backed_destroy(page); // 페이지 제거
-		page = spt_find_page(spt, addr_buf + PGSIZE); // 기존 주소보다 한 페이지 위에 주소의 페이지를 획득.
-		if (page->file.cnt == 0 || page_get_type(page) != VM_FILE) // 만약 또다른 파일 페이지의 시작이라면 제거 정지.
-		{
-			break;
-		}
-	}
-	file_close(file); // 파일을 닫습니다. 해당 파일 구조체는 mmap 시 reopen 되어 독립적인 카운트를 유지합니다.
+    for (e = list_begin(&curr->mmap_list); e != list_end(&curr->mmap_list); e = list_next(e))
+    {
+        struct mmap_file *mf = list_entry(e, struct mmap_file, elem);
+        if (mf->addr == addr)
+        {
+            target = mf;
+            break;
+        }
+    }
 
-	dprintfg("[do_munmap] munmap complete!\n");
+    if (target == NULL)
+        return;
+
+    void *upage = target->addr;
+    size_t remaining = target->length;
+
+    while (remaining > 0)
+    {
+        struct page *page = spt_find_page(spt, upage);
+        if (page != NULL && page_get_type(page) == VM_FILE)
+        {
+            file_backed_destroy(page);
+            spt_remove_page(spt, page);
+        }
+        upage += PGSIZE;
+        remaining -= PGSIZE;
+    }
+
+    file_close(target->file);
+    list_remove(&target->elem);
+    free(target);
+
+    dprintfg("[do_munmap] munmap complete!\n");
 }
