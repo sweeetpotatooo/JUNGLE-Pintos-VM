@@ -186,10 +186,8 @@ bool spt_insert_page(struct supplemental_page_table *spt,
 
 void spt_remove_page(struct supplemental_page_table *spt, struct page *page)
 {
-	hash_delete(&spt, &page->hash_elem);
-	vm_dealloc_page(page);
-
-	return true;
+        hash_delete(&spt->hash, &page->hash_elem);
+        vm_dealloc_page(page);
 }
 
 /* 교체될 프레임(struct frame)을 선택하여 가져옵니다. */

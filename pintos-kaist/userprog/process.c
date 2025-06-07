@@ -20,10 +20,6 @@
 #include "threads/vaddr.h"
 #include "intrinsic.h"
 #include "vm/vm.h"
-#define VM
-
-#ifdef VM
-#endif
 
 static void process_cleanup(void);
 static bool load(const char *file_name, struct intr_frame *if_);
