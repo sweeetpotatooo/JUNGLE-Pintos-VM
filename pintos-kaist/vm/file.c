@@ -71,41 +71,48 @@ file_backed_destroy(struct page *page)
 	//    - spt_remove_page에서 구현하는것이 좋을듯하다
 	//   - write-back 구현
 	
+	dprintfg("[file_backed_destroy] routine start. page->va: %p\n", page->va);
 	struct file_page *file_page = &page->file; 
 	struct pml4 *pml4 = thread_current()->pml4;
 	struct supplemental_page_table *spt = &thread_current()->spt;
-	
 	if (pml4_is_dirty(pml4, page->va))
 	{
+		dprintfg("[file_backed_destroy] writing back. file: %p, size: %d, ofs: %d\n", file_page->file, file_page->size, file_page->file_ofs);
 		// write back
-		file_write_at(file_page->file, page->va, file_page->size, file_page->file_ofs); // Writes SIZE bytes만큼 쓴다.
+		// file_write_at (struct file *file, const void *buffer, off_t size, off_t file_ofs) {
+		
+		off_t write_bytes = file_write_at(file_page->file, page->va, file_page->size, file_page->file_ofs); // Writes SIZE bytes만큼 쓴다.
+		dprintfg("[file_backed_destroy] writeback txt: %s\n", page->va);
+		dprintfg("[file_backed_destroy] actual writeback bytes: %d\n", write_bytes); // 파일에 잘 써지기까지 한다. reopen 된 별도의 파일 구조체에 쓴게 문제인가?
 	}
 	
 	/* 
 	* DEBUG: spt_remove_page를 여기서 호출하면 중복이다. 위의 주석을 참조.
 	*/
 	// spt_remove_page(spt, page); // spt 제거 -> spt에서 지우면 pml4에서 계속 업데이트가 된다?
-	
-
 }
 
 /* Do the mmap */
 void *
 do_mmap(void *addr, size_t length, int writable, struct file *file, off_t offset)
 {
-	dprintfg("[do_mmap] routine start\n");
-	// addr 의 페이지가 이미 VM_FILE인지 점검.
-	if(page_get_type(spt_find_page(&thread_current()->spt, addr))== VM_FILE)
+	dprintfg("[do_mmap] routine start. addr: %p\n", addr);
+	
+	struct page *page = spt_find_page(&thread_current()->spt, addr);
+	if (page != NULL && page_get_type(page) == VM_FILE)
 	{
+		dprintfg("[do_mmap] page is already mapped\n");
 		return NULL;
 	}
-	struct file *re_file = file_reopen(file);
-	size_t filesize = file_length(file);
-	size_t file_read_bytes = filesize < length ? filesize : length;
+	dprintfg("[do_mmap] address is clear. proceeding mapping...\n");
+	struct file *re_file = file_reopen(file); // file을 reopen
+	size_t filesize = file_length(re_file); // filesize 획득
+	size_t file_read_bytes = filesize < length ? filesize : length; // 
 	size_t file_zero_bytes = PGSIZE - (file_read_bytes % PGSIZE);
 
 	void *original_addr = addr;
 	int iter = 0;
+	dprintfg("[do_mmap] starting loop\n");
 	for (off_t current_off = offset; file_read_bytes > 0; )
 	{
 		size_t page_read_bytes = file_read_bytes > PGSIZE ? PGSIZE : file_read_bytes;
@@ -149,7 +156,7 @@ bool lazy_load_file_backed(struct page *page, void *aux)
 	// file page 업데이트
 	struct file_page *file_page = &page->file; //file_backed에 page 정보를 저장한다
 	file_page->file = lazy_aux->file; // file 정보 저장
-	file_page->file_ofs = lazy_aux->offset; // 
+	file_page->file_ofs = lazy_aux->offset;  
 	file_page->size = lazy_aux->length;
 	file_page->cnt = lazy_aux->cnt;
 
@@ -168,13 +175,14 @@ void do_munmap(void *addr)
 	// 프로세스가 종료되면 매핑 자동해제. munmap할 필요는 없음.
 	// 매핑 해제 시 수정된 페이지는 파일에 반영
 	// 수정되지 않은 페이지는 반영할 필요 없음.
-	dprintfg("[do_munmap] routine start. va: %p\n", addr);
+	dprintfg("[do_munmap] routine start. va: %p\n", addr); 
+	// addr 의 페이지가 이미 VM_FILE인지 점검.
 
 	struct supplemental_page_table *spt = &thread_current()-> spt; // 현재 스레드의 spt 정보 참조
 	struct page *page = spt_find_page(spt, addr); // spt정보를 가져온다.
-	void *addr_buf = page->va;
-	struct file *file = page->file.file;
-	if (page->file.cnt != 0 || page_get_type(page) != VM_FILE)
+	void *addr_buf = page->va; // 페이지 가상 주소를 미리 저장.
+	struct file *file = page->file.file; // 파일 페이지의 파일을 참조.
+	if (page->file.cnt != 0 || page_get_type(page) != VM_FILE) // 만약 파일 페이지가 이미 매핑돼 있다면 스킵.
 	{
 		// undefined action
 		dprintfg("[do_munmap] undefined action! expected type: %d, actual: %d\n", (VM_FILE | VM_FILE_FIRST) , page->uninit.type);
@@ -183,18 +191,24 @@ void do_munmap(void *addr)
 
 	// 주소를 역으로 올라가며 페이지를 삭제.
 	// 또다른 시작 페이지를 만나면 정지.
-	while(page != NULL && page->uninit.type == VM_FILE)
+	while(page != NULL)
 	{
 		dprintfg("[do_munmap] deleting page. va: %p\n", page->va);
 		addr_buf = page->va; // 페이지 구조체를 제거하기 전 주소 저장
 		file_backed_destroy(page); // 페이지 제거
 		page = spt_find_page(spt, addr_buf + PGSIZE); // 기존 주소보다 한 페이지 위에 주소의 페이지를 획득.
+		if (page == NULL)
+		{
+			dprintfg("[do_munmap] page above not allocated\n");
+			break;
+		}
 		if (page->file.cnt == 0 || page_get_type(page) != VM_FILE) // 만약 또다른 파일 페이지의 시작이라면 제거 정지.
 		{
+			dprintfg("[do_munmap] above page is another mapped page\n");
 			break;
 		}
 	}
-	file_close(file); // 파일을 닫습니다. 해당 파일 구조체는 mmap 시 reopen 되어 독립적인 카운트를 유지합니다.
+	// file_close(file); // 파일을 닫습니다. 해당 파일 구조체는 mmap 시 reopen 되어 독립적인 카운트를 유지합니다.
 
 	dprintfg("[do_munmap] munmap complete!\n");
 }
