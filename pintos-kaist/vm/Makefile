@@ -12,5 +12,12 @@ debug:
 	make clean && \
 	make -j && \
 	cd ./build && \
-	pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/vm/mmap-unmap:mmap-unmap -p ../../tests/vm/sample.txt:sample.txt --swap-disk=4 -- -q   -f run mmap-unmap
-	
+	pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/vm/mmap-write:mmap-write --swap-disk=4 -- -q   -f run mmap-write 
+
+.PHONY: zeros
+zeros:
+	make clean && \
+	make -j && \
+	cd ./build && \
+	dd if=/dev/zero of=tests/vm/zeros bs=1024 count=6 && \
+	pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/vm/mmap-overlap:mmap-overlap -p tests/vm/zeros:zeros --swap-disk=4 -- -q   -f run mmap-overlap

@@ -332,15 +332,14 @@ You can use the functions in threads/mmu.c.
 bool vm_try_handle_fault(struct intr_frame *f, void *addr,
 						 bool user, bool write, bool not_present)
 {
+	dprintfg("[vm_try_handle_fault] fault handle start. addr: %p\n", addr);
 
-	// HACK: not_present 처리는 언제 해 주는지 잘 모르겠음.
-	dprintfc("[vm_try_handle_fault] fault handle start. addr: %p\n", addr);
 	struct supplemental_page_table *spt = &thread_current()->spt; // 현재 쓰레드의 spt 가져옴.
 	if (not_present)
 	{
 		struct page *page;
 
-		dprintfc("[vm_try_handle_fault] checking f->rsp: %p\n", f->rsp);
+		dprintfg("[vm_try_handle_fault] checking f->rsp: %p\n", f->rsp);
 
 		void *rsp = is_kernel_vaddr(f->rsp) ? thread_current()->rsp : f->rsp;
 
@@ -357,7 +356,7 @@ bool vm_try_handle_fault(struct intr_frame *f, void *addr,
 		}
 		else
 		{
-
+			dprintfg("[vm_try_handle_fault] trying to find page from spt\n");
 			page = spt_find_page(spt, addr); // page를 null로 설정해. stack growth 경우에는 spt 찾을 필요 없지 않나? 어차피 없을텐데.
 			return vm_do_claim_page(page);	 // 그 페이지에 대응하는 프레임을 할당받아.
 		}
