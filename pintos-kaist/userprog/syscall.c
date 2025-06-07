@@ -18,6 +18,9 @@
 #include <round.h>
 #include "list.h"
 
+/* Definition for the global file system lock. */
+struct lock filesys_lock;
+
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
 bool create(const char *file, unsigned initial_size);
