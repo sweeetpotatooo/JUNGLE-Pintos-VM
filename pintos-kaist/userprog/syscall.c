@@ -22,6 +22,28 @@
 /* Global filesystem lock used by system calls. */
 struct lock filesys_lock;
 
+/* Acquire filesys_lock if this thread does not already hold it.
+   Returns true when the lock was acquired by this call and should be
+   released later. */
+static bool
+filesys_lock_acquire_cond (void)
+{
+    if (!lock_held_by_current_thread (&filesys_lock))
+    {
+        lock_acquire (&filesys_lock);
+        return true;
+    }
+    return false;
+}
+
+/* Release filesys_lock only if ACQUIRED is true. */
+static void
+filesys_lock_release_cond (bool acquired)
+{
+    if (acquired)
+        lock_release (&filesys_lock);
+}
+
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
 bool create(const char *file, unsigned initial_size);
@@ -87,10 +109,12 @@ void halt(void){
  * @param position: 위치.
  */
 void seek(int fd, unsigned position) {
-	struct file *file = process_get_file_by_fd(fd);
-	if (file == NULL)
-		return;
-	file_seek(file, position);
+        struct file *file = process_get_file_by_fd(fd);
+        if (file == NULL)
+                return;
+        bool locked = filesys_lock_acquire_cond ();
+        file_seek (file, position);
+        filesys_lock_release_cond (locked);
 }
 
 /**
@@ -114,21 +138,21 @@ void exit(int status) {
  * @param size: 복사할 사이즈.
  */
 int write(int fd, const void *buffer, unsigned size){
-	check_address(buffer);
-	int bytes_write = 0;
-	if (fd == STDOUT_FILENO) { // stdout면 직접 작성
-		putbuf(buffer, size);
-		bytes_write = size;
-	} else {
-		if (fd < 2) return -1;
+        check_address(buffer);
+        int bytes_write = 0;
+        if (fd == STDOUT_FILENO) { // stdout면 직접 작성
+                putbuf(buffer, size);
+                bytes_write = size;
+        } else {
+                if (fd < 2) return -1;
 
-		struct file *file = process_get_file_by_fd(fd);
-		if (file == NULL)
-			return -1;
-		lock_acquire(&filesys_lock);
-		bytes_write = file_write(file, buffer, size);
-		lock_release(&filesys_lock);
-	}
+                struct file *file = process_get_file_by_fd(fd);
+                if (file == NULL)
+                        return -1;
+                bool locked = filesys_lock_acquire_cond ();
+                bytes_write = file_write (file, buffer, size);
+                filesys_lock_release_cond (locked);
+        }
 
 	return bytes_write;
 }
@@ -173,9 +197,12 @@ int exec(char *file_name) {
  * @param file: 생성할 파일의 이름 및 경로 정보.
  * @param initial_size: 생성할 파일의 크기.
  */
-bool create(const char *file, unsigned initial_size) {		
-	check_address(file);
-	return filesys_create(file, initial_size);
+bool create(const char *file, unsigned initial_size) {
+        check_address(file);
+        bool locked = filesys_lock_acquire_cond ();
+        bool ok = filesys_create (file, initial_size);
+        filesys_lock_release_cond (locked);
+        return ok;
 }
 
 /**
@@ -184,9 +211,12 @@ bool create(const char *file, unsigned initial_size) {
  * 
  * @param file: 삭제할 파일.
  */
-bool remove(const char *file) {	
-	check_address(file);
-	return filesys_remove(file);
+bool remove(const char *file) {
+        check_address(file);
+        bool locked = filesys_lock_acquire_cond ();
+        bool ok = filesys_remove (file);
+        filesys_lock_release_cond (locked);
+        return ok;
 }
 
 /**
@@ -196,26 +226,28 @@ bool remove(const char *file) {
  * @param file: 오픈할 파일.
  */
 int open(const char *filename) {
-	dprintfg("[open] routine start. filename: %p\n", filename);
-	check_address(filename); // 이상한 포인터면 즉시 종료
-	dprintfg("[open] validation complete\n");
-	struct file *file_obj = filesys_open(filename);
-	
-	if (file_obj == NULL) {
-		return -1;
-	}
+        dprintfg("[open] routine start. filename: %p\n", filename);
+        check_address(filename); // 이상한 포인터면 즉시 종료
+        dprintfg("[open] validation complete\n");
+        bool locked = filesys_lock_acquire_cond ();
+        struct file *file_obj = filesys_open (filename);
+        
+        if (file_obj == NULL) {
+                filesys_lock_release_cond (locked);
+                return -1;
+        }
 
-	int fd = process_add_file(file_obj);
-	dprintfg("[open] process add file done\n");
+        int fd = process_add_file(file_obj);
+        dprintfg("[open] process add file done\n");
 
-	if (fd == -1) { // fd table 꽉찬 경우 그냥 닫아버림
-		dprintfg("[open] failed\n");
-		file_close(file_obj);
-    	file_obj = NULL;
-	}
-	dprintfg("[open] success. returnin fd: %d\n", fd);
-	
-	return fd;
+        if (fd == -1) { // fd table 꽉찬 경우 그냥 닫아버림
+                dprintfg("[open] failed\n");
+                file_close(file_obj);
+        file_obj = NULL;
+        }
+        dprintfg("[open] success. returnin fd: %d\n", fd);
+        filesys_lock_release_cond (locked);
+        return fd;
 }
 
 /**
@@ -225,12 +257,14 @@ int open(const char *filename) {
  * @param file: 닫을 파일.
  */
 void close(int fd){
-	dprintfg("[close] routine start. fd: %d\n", fd);
-	struct file *file_obj = process_get_file_by_fd(fd);
-	if (file_obj == NULL)
-		return;
-	file_close(file_obj);
-	process_close_file_by_id(fd);
+        dprintfg("[close] routine start. fd: %d\n", fd);
+        struct file *file_obj = process_get_file_by_fd(fd);
+        if (file_obj == NULL)
+                return;
+        bool locked = filesys_lock_acquire_cond ();
+        file_close (file_obj);
+        filesys_lock_release_cond (locked);
+        process_close_file_by_id(fd);
 }
 
 /**
@@ -240,11 +274,14 @@ void close(int fd){
  * @param fd: 파일 디스크립터.
  */
 int filesize(int fd) {
-	struct file *open_file = process_get_file_by_fd(fd);
-	if (open_file == NULL) {
-		return -1;
-	}
-	return file_length(open_file);
+        struct file *open_file = process_get_file_by_fd(fd);
+        if (open_file == NULL) {
+                return -1;
+        }
+        bool locked = filesys_lock_acquire_cond ();
+        int len = file_length (open_file);
+        filesys_lock_release_cond (locked);
+        return len;
 }
 
 /**
@@ -299,9 +336,9 @@ int read(int fd, void *buffer, unsigned size){
       
     // 4. 정상적인 파일이면 read
     off_t ret;
-    lock_acquire(&filesys_lock);
-    ret = file_read(file, buffer, size);
-    lock_release(&filesys_lock);
+    bool locked = filesys_lock_acquire_cond ();
+    ret = file_read (file, buffer, size);
+    filesys_lock_release_cond (locked);
     return ret;
 }
 
