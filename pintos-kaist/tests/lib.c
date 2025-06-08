@@ -5,7 +5,9 @@
 #include <string.h>
 #include <syscall.h>
 
-const char *test_name;
+/* Allow tests to provide their own definition of `test_name`.
+   We define it weakly so multiple definitions don't cause link errors. */
+const char *test_name __attribute__((weak));
 bool quiet = false;
 
 static void
