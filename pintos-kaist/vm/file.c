@@ -109,6 +109,11 @@ do_mmap(void *addr, size_t length, int writable, struct file *file, off_t offset
 		dprintfg("[do_mmap] page is already mapped\n");
 		return NULL;
 	}
+	
+	if (is_kernel_vaddr(addr)){
+		return NULL;
+	}
+	
 	dprintfg("[do_mmap] address is clear. proceeding mapping...\n");
 	struct file *re_file = file_reopen(file); // file을 reopen
 	size_t filesize = file_length(re_file); // filesize 획득

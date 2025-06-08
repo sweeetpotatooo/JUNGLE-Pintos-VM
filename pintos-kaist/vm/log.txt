@@ -246,7 +246,7 @@ pass tests/vm/page-merge-seq
 pintos -v -k -T 600 -m 20   --fs-disk=10 -p tests/vm/page-merge-par:page-merge-par -p tests/vm/child-sort:child-sort --swap-disk=10 -- -q   -f run page-merge-par < /dev/null 2> tests/vm/page-merge-par.errors > tests/vm/page-merge-par.output
 perl -I../.. ../../tests/vm/page-merge-par.ck tests/vm/page-merge-par tests/vm/page-merge-par.result
 FAIL tests/vm/page-merge-par
-run: wait for child 4: FAILED
+run: open "buf0": FAILED
 pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/vm/page-merge-stk:page-merge-stk -p tests/vm/child-qsort:child-qsort --swap-disk=10 -- -q   -f run page-merge-stk < /dev/null 2> tests/vm/page-merge-stk.errors > tests/vm/page-merge-stk.output
 perl -I../.. ../../tests/vm/page-merge-stk.ck tests/vm/page-merge-stk tests/vm/page-merge-stk.result
 FAIL tests/vm/page-merge-stk
@@ -254,7 +254,7 @@ run: TIMEOUT
 pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/vm/page-merge-mm:page-merge-mm -p tests/vm/child-qsort-mm:child-qsort-mm --swap-disk=10 -- -q   -f run page-merge-mm < /dev/null 2> tests/vm/page-merge-mm.errors > tests/vm/page-merge-mm.output
 perl -I../.. ../../tests/vm/page-merge-mm.ck tests/vm/page-merge-mm tests/vm/page-merge-mm.result
 FAIL tests/vm/page-merge-mm
-run: wait for child 0: FAILED
+run: open "buf0": FAILED
 pintos -v -k -T 600 -m 20   --fs-disk=10 -p tests/vm/page-shuffle:page-shuffle --swap-disk=4 -- -q   -f run page-shuffle < /dev/null 2> tests/vm/page-shuffle.errors > tests/vm/page-shuffle.output
 perl -I../.. ../../tests/vm/page-shuffle.ck tests/vm/page-shuffle tests/vm/page-shuffle.result
 pass tests/vm/page-shuffle
@@ -270,7 +270,7 @@ pass tests/vm/mmap-unmap
 dd if=/dev/zero of=tests/vm/zeros bs=1024 count=6
 6+0 records in
 6+0 records out
-6144 bytes (6.1 kB, 6.0 KiB) copied, 0.00126338 s, 4.9 MB/s
+6144 bytes (6.1 kB, 6.0 KiB) copied, 0.00120614 s, 5.1 MB/s
 pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/vm/mmap-overlap:mmap-overlap -p tests/vm/zeros:zeros --swap-disk=4 -- -q   -f run mmap-overlap < /dev/null 2> tests/vm/mmap-overlap.errors > tests/vm/mmap-overlap.output
 perl -I../.. ../../tests/vm/mmap-overlap.ck tests/vm/mmap-overlap tests/vm/mmap-overlap.result
 pass tests/vm/mmap-overlap
@@ -333,12 +333,10 @@ perl -I../.. ../../tests/vm/mmap-off.ck tests/vm/mmap-off tests/vm/mmap-off.resu
 pass tests/vm/mmap-off
 pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/vm/mmap-bad-off:mmap-bad-off -p ../../tests/vm/large.txt:large.txt --swap-disk=4 -- -q   -f run mmap-bad-off < /dev/null 2> tests/vm/mmap-bad-off.errors > tests/vm/mmap-bad-off.output
 perl -I../.. ../../tests/vm/mmap-bad-off.ck tests/vm/mmap-bad-off tests/vm/mmap-bad-off.result
-FAIL tests/vm/mmap-bad-off
-run: try to mmap invalid offset: FAILED
+pass tests/vm/mmap-bad-off
 pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/vm/mmap-kernel:mmap-kernel -p ../../tests/vm/sample.txt:sample.txt --swap-disk=4 -- -q   -f run mmap-kernel < /dev/null 2> tests/vm/mmap-kernel.errors > tests/vm/mmap-kernel.output
 perl -I../.. ../../tests/vm/mmap-kernel.ck tests/vm/mmap-kernel tests/vm/mmap-kernel.result
-FAIL tests/vm/mmap-kernel
-run: try to mmap over kernel 0: FAILED
+pass tests/vm/mmap-kernel
 pintos -v -k -T 600 -m 20   --fs-disk=10 -p tests/vm/lazy-file:lazy-file -p ../../tests/vm/sample.txt:sample.txt -p ../../tests/vm/small.txt:small.txt --swap-disk=4 -- -q   -f run lazy-file < /dev/null 2> tests/vm/lazy-file.errors > tests/vm/lazy-file.output
 perl -I../.. ../../tests/vm/lazy-file.ck tests/vm/lazy-file tests/vm/lazy-file.result
 pass tests/vm/lazy-file
@@ -673,8 +671,8 @@ pass tests/vm/mmap-bad-fd2
 pass tests/vm/mmap-bad-fd3
 pass tests/vm/mmap-zero-len
 pass tests/vm/mmap-off
-FAIL tests/vm/mmap-bad-off
-FAIL tests/vm/mmap-kernel
+pass tests/vm/mmap-bad-off
+pass tests/vm/mmap-kernel
 pass tests/vm/lazy-file
 pass tests/vm/lazy-anon
 FAIL tests/vm/swap-file
@@ -713,7 +711,7 @@ pass tests/threads/priority-sema
 pass tests/threads/priority-condvar
 pass tests/threads/priority-donate-chain
 FAIL tests/vm/cow/cow-simple
-10 of 141 tests failed.
+8 of 141 tests failed.
 ../../tests/Make.tests:28: recipe for target 'check' failed
 make[1]: *** [check] Error 1
 make[1]: Leaving directory '/workspaces/JUNGLE-Pintos-VM/pintos-kaist/vm/build'

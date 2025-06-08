@@ -17,6 +17,7 @@
 #include "threads/mmu.h"
 #include <round.h>
 #include "list.h"
+#define MAP_FAILED ((void *) NULL)
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
@@ -282,7 +283,7 @@ int read(int fd, void *buffer, unsigned size){
         return -1;
 		
     struct file *file = process_get_file_by_fd(fd);
-	check_address_writable(buffer);
+		check_address_writable(buffer);
     if (file == NULL)
         return -1; // 해당 파일이 NULL이면 즉시 리턴.
 
@@ -310,20 +311,33 @@ void *mmap (void *addr, size_t length, int writable, int fd, off_t offset)
 {
 	dprintfg("[mmap] routine start\n");
 	struct thread *curr = thread_current();
-	if (addr == NULL || length == 0 || fd == 0 || fd == 1 || (uint64_t) addr % 4096 != 0 || spt_find_page(&curr->spt, addr)) {
+	/* 0-1. 실패 조건 검사 ─ offset 페이지 정렬 여부 추가 */
+	if (addr == NULL
+	    || length == 0
+	    || fd == 0 || fd == 1          /* stdin / stdout 불가 */
+	    || (uint64_t)addr % PGSIZE != 0 /* 주소 페이지 정렬 */
+	    || offset % PGSIZE != 0        
+	    || spt_find_page(&curr->spt, addr))
+	{
 		dprintfg("[mmap] failing mmap\n");
-		return NULL;
+		return MAP_FAILED;
 	}
 
 	struct file *file = process_get_file_by_fd(fd);
+
+	int filesize_file = filesize(fd);
+	if (filesize_file == 0
+	    || length == 0
+	    || length > (uintptr_t)addr)   
+		return MAP_FAILED;
 
 	dprintfg("[mmap] running do_mmap\n");
 	void *upage = do_mmap(addr, length, writable, file, offset);
 
 	dprintfg("[mmap] mmap complete.\n");
-	
 	return upage;
 }
+
 
 void munmap(void *addr){
 	do_munmap(addr);

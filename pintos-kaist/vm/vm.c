@@ -485,8 +485,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
         if (type == VM_UNINIT) {
             vm_initializer *init = src_page->uninit.init;
             void *aux            = src_page->uninit.aux;
-            if (!vm_alloc_page_with_initializer (src_page->uninit.type,
-                                                 upage, writable, init, aux))
+            if (!vm_alloc_page_with_initializer (src_page->uninit.type, upage, writable, init, aux))
                 return false;
             continue;
         }
@@ -501,9 +500,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
             aux->offset   = src_page->file.file_ofs;       /* 파일 내 오프셋            */
             aux->cnt      = src_page->file.cnt;            /* 페이지 내 유효 바이트 수   */
 
-            if (!vm_alloc_page_with_initializer (VM_FILE, upage,
-                                                 writable,
-                                                 lazy_load_file_backed, aux)) {
+            if (!vm_alloc_page_with_initializer (VM_FILE, upage,writable,lazy_load_file_backed, aux)) {
                 free (aux);
                 return false;
             }
