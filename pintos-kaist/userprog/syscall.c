@@ -1,5 +1,5 @@
 #include "filesys/filesys.h" 
-#include "userprog/process.h" 
+#include "userprog/process.h"
 #include "threads/palloc.h"
 #include "filesys/file.h"
 
@@ -18,6 +18,9 @@
 #include <round.h>
 #include "list.h"
 #define MAP_FAILED ((void *) NULL)
+
+/* Global filesystem lock used by system calls. */
+struct lock filesys_lock;
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
