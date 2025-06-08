@@ -8,6 +8,7 @@
 // project 3
 #include "threads/mmu.h"
 #include "vm/uninit.h"
+#include "userprog/syscall.h"
 #include "lib/kernel/hash.h"
 #include "userprog/process.h"
 #include <string.h>
@@ -496,7 +497,9 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 
             aux->length   = src_page->file.cnt;            /* 실제로 읽어올 바이트 수   */
             aux->writable = writable;
+            bool locked = filesys_lock_acquire_cond ();
             aux->file     = file_reopen (src_page->file.file);
+            filesys_lock_release_cond (locked);
             aux->offset   = src_page->file.file_ofs;       /* 파일 내 오프셋            */
             aux->cnt      = src_page->file.cnt;            /* 페이지 내 유효 바이트 수   */
 

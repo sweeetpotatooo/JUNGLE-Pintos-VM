@@ -22,27 +22,6 @@
 /* Global filesystem lock used by system calls. */
 struct lock filesys_lock;
 
-/* Acquire filesys_lock if this thread does not already hold it.
-   Returns true when the lock was acquired by this call and should be
-   released later. */
-static bool
-filesys_lock_acquire_cond (void)
-{
-    if (!lock_held_by_current_thread (&filesys_lock))
-    {
-        lock_acquire (&filesys_lock);
-        return true;
-    }
-    return false;
-}
-
-/* Release filesys_lock only if ACQUIRED is true. */
-static void
-filesys_lock_release_cond (bool acquired)
-{
-    if (acquired)
-        lock_release (&filesys_lock);
-}
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);

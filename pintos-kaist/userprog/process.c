@@ -570,22 +570,23 @@ static bool load(const char *file_name, struct intr_frame *if_)
 	process_activate(thread_current());
 	dprintf("[LOAD] pml4 activated\n");
 
-	/* Open executable file. */
-	file = filesys_open(file_name);
-	if (file == NULL)
-	{
-		printf("load: %s: open failed\n", file_name);
-		goto done;
-	}
-	dprintf("[LOAD] exec file opened\n");
+        /* Open executable file. */
+        bool locked = filesys_lock_acquire_cond ();
+        file = filesys_open (file_name);
+        if (file == NULL)
+        {
+                printf("load: %s: open failed\n", file_name);
+                goto done_locked;
+        }
+        dprintf("[LOAD] exec file opened\n");
 
 	/* Read and verify executable header. */
-	if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr || memcmp(ehdr.e_ident, "\177ELF\2\1\1", 7) || ehdr.e_type != 2 || ehdr.e_machine != 0x3E // amd64
-		|| ehdr.e_version != 1 || ehdr.e_phentsize != sizeof(struct Phdr) || ehdr.e_phnum > 1024)
-	{
-		printf("load: %s: error loading executable\n", file_name);
-		goto done;
-	}
+        if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr || memcmp(ehdr.e_ident, "\177ELF\2\1\1", 7) || ehdr.e_type != 2 || ehdr.e_machine != 0x3E // amd64
+                || ehdr.e_version != 1 || ehdr.e_phentsize != sizeof(struct Phdr) || ehdr.e_phnum > 1024)
+        {
+                printf("load: %s: error loading executable\n", file_name);
+                goto done_locked;
+        }
 	dprintf("[LOAD] verified executable header\n");
 
 	/* Read program headers. */
@@ -594,12 +595,12 @@ static bool load(const char *file_name, struct intr_frame *if_)
 	{
 		struct Phdr phdr;
 
-		if (file_ofs < 0 || file_ofs > file_length(file))
-			goto done;
-		file_seek(file, file_ofs);
+                if (file_ofs < 0 || file_ofs > file_length(file))
+                        goto done_locked;
+                file_seek (file, file_ofs);
 
-		if (file_read(file, &phdr, sizeof phdr) != sizeof phdr)
-			goto done;
+                if (file_read(file, &phdr, sizeof phdr) != sizeof phdr)
+                        goto done_locked;
 		file_ofs += sizeof phdr;
 		switch (phdr.p_type)
 		{
@@ -673,9 +674,14 @@ static bool load(const char *file_name, struct intr_frame *if_)
 	dprintf("[LOAD] load complete!\n");
 
 done:
-	/* We arrive here whether the load is successful or not. */
-	// file_close (file); // TODO: 여기 말고 process_exit에서 닫도록 해야.
-	return success;
+        /* We arrive here whether the load is successful or not. */
+        // file_close (file); // TODO: 여기 말고 process_exit에서 닫도록 해야.
+        filesys_lock_release_cond (locked);
+        return success;
+
+done_locked:
+        filesys_lock_release_cond (locked);
+        return success;
 }
 
 /* Checks whether PHDR describes a valid, loadable segment in

@@ -6,6 +6,7 @@
 #include "threads/vaddr.h"
 #include "threads/mmu.h"
 #include <string.h>
+#include "userprog/syscall.h"
 
 static bool file_backed_swap_in(struct page *page, void *kva);
 static bool file_backed_swap_out(struct page *page);
@@ -49,8 +50,13 @@ static bool
 file_backed_swap_in(struct page *page, void *kva)
 {
         struct file_page *file_page = &page->file;
-        if (file_read_at(file_page->file, kva, file_page->size, file_page->file_ofs) != (int)file_page->size)
+        bool locked = filesys_lock_acquire_cond ();
+        if (file_read_at (file_page->file, kva, file_page->size, file_page->file_ofs) != (int)file_page->size)
+        {
+                filesys_lock_release_cond (locked);
                 return false;
+        }
+        filesys_lock_release_cond (locked);
         return true;
 }
 
@@ -78,15 +84,17 @@ file_backed_destroy(struct page *page)
 	
 	dprintfg("[file_backed_destroy] routine start. page->va: %p\n", page->va);
 	struct file_page *file_page = &page->file; 
-	struct pml4 *pml4 = thread_current()->pml4;
-	struct supplemental_page_table *spt = &thread_current()->spt;
-	if (pml4_is_dirty(pml4, page->va))
-	{
-		dprintfg("[file_backed_destroy] writing back. file: %p, size: %d, ofs: %d\n", file_page->file, file_page->size, file_page->file_ofs);
-		// write back
-		// file_write_at (struct file *file, const void *buffer, off_t size, off_t file_ofs) {
-		
-		off_t write_bytes = file_write_at(file_page->file, page->va, file_page->size, file_page->file_ofs); // Writes SIZE bytes만큼 쓴다.
+        struct pml4 *pml4 = thread_current()->pml4;
+        struct supplemental_page_table *spt = &thread_current()->spt;
+        if (pml4_is_dirty(pml4, page->va))
+        {
+                dprintfg("[file_backed_destroy] writing back. file: %p, size: %d, ofs: %d\n", file_page->file, file_page->size, file_page->file_ofs);
+                // write back
+                // file_write_at (struct file *file, const void *buffer, off_t size, off_t file_ofs) {
+
+                bool locked = filesys_lock_acquire_cond ();
+                off_t write_bytes = file_write_at (file_page->file, page->va, file_page->size, file_page->file_ofs); // Writes SIZE bytes만큼 쓴다.
+                filesys_lock_release_cond (locked);
 		dprintfg("[file_backed_destroy] writeback txt: %s\n", page->va);
 		dprintfg("[file_backed_destroy] actual writeback bytes: %d\n", write_bytes); // 파일에 잘 써지기까지 한다. reopen 된 별도의 파일 구조체에 쓴게 문제인가?
 	}
@@ -114,11 +122,12 @@ do_mmap(void *addr, size_t length, int writable, struct file *file, off_t offset
 		return NULL;
 	}
 	
-	dprintfg("[do_mmap] address is clear. proceeding mapping...\n");
-	struct file *re_file = file_reopen(file); // file을 reopen
-	size_t filesize = file_length(re_file); // filesize 획득
-	size_t file_read_bytes = filesize < length ? filesize : length; // 
-	size_t file_zero_bytes = PGSIZE - (file_read_bytes % PGSIZE);
+        dprintfg("[do_mmap] address is clear. proceeding mapping...\n");
+        bool locked = filesys_lock_acquire_cond ();
+        struct file *re_file = file_reopen (file); // file을 reopen
+        size_t filesize = file_length (re_file); // filesize 획득
+        size_t file_read_bytes = filesize < length ? filesize : length; //
+        size_t file_zero_bytes = PGSIZE - (file_read_bytes % PGSIZE);
 
 	void *original_addr = addr;
 	int iter = 0;
@@ -136,19 +145,21 @@ do_mmap(void *addr, size_t length, int writable, struct file *file, off_t offset
 		dprintfg("[do_mmap] allocating page with aux. 1. length should be equal except last one. 2. offset must incremental\n");
 		dprintfg("[do_mmap] aux->length: %d, aux->offset: %d \n", aux->length, aux->offset);
 
-		if (!vm_alloc_page_with_initializer(VM_FILE, addr, writable, lazy_load_file_backed, aux))
-		{
-			dprintfg("[do_mmap] failed. returning NULL\n");
-			return NULL;
-		}
+                if (!vm_alloc_page_with_initializer(VM_FILE, addr, writable, lazy_load_file_backed, aux))
+                {
+                        dprintfg("[do_mmap] failed. returning NULL\n");
+                        filesys_lock_release_cond (locked);
+                        return NULL;
+                }
 		current_off += page_read_bytes;
 		addr += PGSIZE;
 		file_read_bytes -= page_read_bytes;
 		file_zero_bytes -= page_zero_bytes;
 
 	}
-	dprintfg("[do_mmap] success. returning original addr\n");
-	return original_addr;
+        dprintfg("[do_mmap] success. returning original addr\n");
+        filesys_lock_release_cond (locked);
+        return original_addr;
 }
 
 bool lazy_load_file_backed(struct page *page, void *aux)
@@ -170,13 +181,16 @@ bool lazy_load_file_backed(struct page *page, void *aux)
 	file_page->size = lazy_aux->length;
 	file_page->cnt = lazy_aux->cnt;
 
-	dprintfd("[lazy_load_file_backed] reading file\n");
-	if (file_read_at(lazy_aux->file, page->frame->kva, lazy_aux->length, lazy_aux->offset) != (int)lazy_aux->length)
-	{
-		free(lazy_aux);
-		return false;
-	}
-	return true;
+        dprintfd("[lazy_load_file_backed] reading file\n");
+        bool locked = filesys_lock_acquire_cond ();
+        if (file_read_at (lazy_aux->file, page->frame->kva, lazy_aux->length, lazy_aux->offset) != (int)lazy_aux->length)
+        {
+                filesys_lock_release_cond (locked);
+                free(lazy_aux);
+                return false;
+        }
+        filesys_lock_release_cond (locked);
+        return true;
 }
 
 /* Do the munmap */
