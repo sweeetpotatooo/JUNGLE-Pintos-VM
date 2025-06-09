@@ -27,6 +27,7 @@ void vm_init(void)
 {
 	vm_anon_init();
 	vm_file_init();
+	list_init(&frame_list);
 #ifdef EFILESYS /* Project 4용 */
 	pagecache_init();
 #endif
@@ -196,8 +197,14 @@ void spt_remove_page(struct supplemental_page_table *spt, struct page *page)
 static struct frame *
 vm_get_victim(void)
 {
-	struct frame *victim = NULL;
-	/* TODO: 페이지 교체 정책은 여러분이 결정할 수 있습니다. */
+	struct frame *victim;
+	/* TODO: 교체 정책을 여기서 구현해서 희생자 페이지 찾기 */
+
+	ASSERT(list_empty(&frame_list)==false);
+		
+
+	victim = list_entry(list_pop_front(&frame_list), struct frame, frame_elem);
+	ASSERT(victim!=NULL);
 
 	return victim;
 }
@@ -207,10 +214,21 @@ vm_get_victim(void)
 static struct frame *
 vm_evict_frame(void)
 {
-	struct frame *victim UNUSED = vm_get_victim();
-	/* TODO: victim을 스왑 아웃하고 교체된 프레임을 반환하세요. */
+	struct frame *victim  = vm_get_victim();
+	if(victim==NULL) return NULL;	
 
+	struct page *page =victim->page;
+	if (page) {
+		if (!swap_out(page))
+			return NULL;
+		pml4_clear_page(thread_current()->pml4, page->va);
+
+		page->frame = NULL; // 연결 해제
+
+		return victim;
+	}
 	return NULL;
+
 }
 
 /* Gets a new physical page from the user pool by calling palloc_get_page.
@@ -241,9 +259,10 @@ vm_get_frame(void)
 	if (frame->kva == NULL)
 	{
 		free(frame);			  // frame 메타 데이터 자료구조 해제
-		frame = vm_evict_frame(); // TODO: evict frame 함수가 아직 구현되지 않음.
+		frame = vm_evict_frame();
 	}
 	ASSERT(frame->kva != NULL);
+	list_push_back (&frame_list, &frame->frame_elem);
 	return frame;
 }
 
