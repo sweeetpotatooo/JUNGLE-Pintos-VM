@@ -59,7 +59,7 @@ void check_address(const uint64_t *addr){
 void check_address_writable(const uint64_t *addr)
 {
 	struct page *page = spt_find_page(&thread_current()->spt, addr);
-	if (!page->writable)
+	if (page != NULL && !page->writable)
 	{
 		exit(-1);
 	}
@@ -259,10 +259,7 @@ int read(int fd, void *buffer, unsigned size){
 	dprintfe("[read] routine start. \n");
 	check_address(buffer);
     check_address(buffer + size-1); 
-	if(!(spt_find_page(&thread_current()->spt, buffer)->writable))
-	{
-		exit(-1);
-	}
+	
     if (size == 0)
         return 0;
     if (buffer == NULL || !is_user_vaddr(buffer))
@@ -290,9 +287,6 @@ int read(int fd, void *buffer, unsigned size){
 		struct thread *cur = thread_current();
       //check_address(addr);
       struct page *page = spt_find_page(&cur->spt, buffer);
-      if(page == NULL || !page->writable) {
-				exit(-1);
-			}
       
     // 4. 정상적인 파일이면 read
     off_t ret;
@@ -361,6 +355,8 @@ void syscall_init (void) {
 /* The main system call interface */
 void syscall_handler (struct intr_frame *f UNUSED) {
 	int sys_call_number = (int) f->R.rax; // 시스템 콜 번호 받아옴
+	struct thread *t = thread_current();
+  t->rsp = f->rsp;
 	/*
 	 x86-64 규약은 함수가 리턴하는 값을 "rax 레지스터"에 담음. 다른 인자들은 rdi, rsi 등 다른 레지스터로 전달.
 	 시스템 콜들 중 값 반환이 필요한 것은, struct intr_frame의 rax 멤버 수정을 통해 구현

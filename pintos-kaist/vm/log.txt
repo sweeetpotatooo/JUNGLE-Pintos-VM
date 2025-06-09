@@ -211,29 +211,7 @@ perl -I../.. ../../tests/vm/pt-write-code2.ck tests/vm/pt-write-code2 tests/vm/p
 pass tests/vm/pt-write-code2
 pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/vm/pt-grow-stk-sc:pt-grow-stk-sc --swap-disk=4 -- -q   -f run pt-grow-stk-sc < /dev/null 2> tests/vm/pt-grow-stk-sc.errors > tests/vm/pt-grow-stk-sc.output
 perl -I../.. ../../tests/vm/pt-grow-stk-sc.ck tests/vm/pt-grow-stk-sc tests/vm/pt-grow-stk-sc.result
-FAIL tests/vm/pt-grow-stk-sc
-Test output failed to match any acceptable form.
-
-Acceptable output:
-  (pt-grow-stk-sc) begin
-  (pt-grow-stk-sc) create "sample.txt"
-  (pt-grow-stk-sc) open "sample.txt"
-  (pt-grow-stk-sc) write "sample.txt"
-  (pt-grow-stk-sc) 2nd open "sample.txt"
-  (pt-grow-stk-sc) read "sample.txt"
-  (pt-grow-stk-sc) compare written data against read data
-  (pt-grow-stk-sc) end
-Differences in `diff -u' format:
-  (pt-grow-stk-sc) begin
-  (pt-grow-stk-sc) create "sample.txt"
-  (pt-grow-stk-sc) open "sample.txt"
-  (pt-grow-stk-sc) write "sample.txt"
-  (pt-grow-stk-sc) 2nd open "sample.txt"
-  (pt-grow-stk-sc) read "sample.txt"
-- (pt-grow-stk-sc) compare written data against read data
-- (pt-grow-stk-sc) end
-
-(Process exit codes are excluded for matching purposes.)
+pass tests/vm/pt-grow-stk-sc
 pintos -v -k -T 300 -m 20   --fs-disk=10 -p tests/vm/page-linear:page-linear --swap-disk=4 -- -q   -f run page-linear < /dev/null 2> tests/vm/page-linear.errors > tests/vm/page-linear.output
 perl -I../.. ../../tests/vm/page-linear.ck tests/vm/page-linear tests/vm/page-linear.result
 pass tests/vm/page-linear
@@ -246,15 +224,15 @@ pass tests/vm/page-merge-seq
 pintos -v -k -T 600 -m 20   --fs-disk=10 -p tests/vm/page-merge-par:page-merge-par -p tests/vm/child-sort:child-sort --swap-disk=10 -- -q   -f run page-merge-par < /dev/null 2> tests/vm/page-merge-par.errors > tests/vm/page-merge-par.output
 perl -I../.. ../../tests/vm/page-merge-par.ck tests/vm/page-merge-par tests/vm/page-merge-par.result
 FAIL tests/vm/page-merge-par
-run: open "buf0": FAILED
+run: wait for child 0: FAILED
 pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/vm/page-merge-stk:page-merge-stk -p tests/vm/child-qsort:child-qsort --swap-disk=10 -- -q   -f run page-merge-stk < /dev/null 2> tests/vm/page-merge-stk.errors > tests/vm/page-merge-stk.output
 perl -I../.. ../../tests/vm/page-merge-stk.ck tests/vm/page-merge-stk tests/vm/page-merge-stk.result
 FAIL tests/vm/page-merge-stk
-run: TIMEOUT
+run: wait for child 0: FAILED
 pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/vm/page-merge-mm:page-merge-mm -p tests/vm/child-qsort-mm:child-qsort-mm --swap-disk=10 -- -q   -f run page-merge-mm < /dev/null 2> tests/vm/page-merge-mm.errors > tests/vm/page-merge-mm.output
 perl -I../.. ../../tests/vm/page-merge-mm.ck tests/vm/page-merge-mm tests/vm/page-merge-mm.result
 FAIL tests/vm/page-merge-mm
-run: open "buf0": FAILED
+run: wait for child 0: FAILED
 pintos -v -k -T 600 -m 20   --fs-disk=10 -p tests/vm/page-shuffle:page-shuffle --swap-disk=4 -- -q   -f run page-shuffle < /dev/null 2> tests/vm/page-shuffle.errors > tests/vm/page-shuffle.output
 perl -I../.. ../../tests/vm/page-shuffle.ck tests/vm/page-shuffle tests/vm/page-shuffle.result
 pass tests/vm/page-shuffle
@@ -270,7 +248,7 @@ pass tests/vm/mmap-unmap
 dd if=/dev/zero of=tests/vm/zeros bs=1024 count=6
 6+0 records in
 6+0 records out
-6144 bytes (6.1 kB, 6.0 KiB) copied, 0.00120614 s, 5.1 MB/s
+6144 bytes (6.1 kB, 6.0 KiB) copied, 0.00122968 s, 5.0 MB/s
 pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/vm/mmap-overlap:mmap-overlap -p tests/vm/zeros:zeros --swap-disk=4 -- -q   -f run mmap-overlap < /dev/null 2> tests/vm/mmap-overlap.errors > tests/vm/mmap-overlap.output
 perl -I../.. ../../tests/vm/mmap-overlap.ck tests/vm/mmap-overlap tests/vm/mmap-overlap.result
 pass tests/vm/mmap-overlap
@@ -640,7 +618,7 @@ pass tests/vm/pt-bad-addr
 pass tests/vm/pt-bad-read
 pass tests/vm/pt-write-code
 pass tests/vm/pt-write-code2
-FAIL tests/vm/pt-grow-stk-sc
+pass tests/vm/pt-grow-stk-sc
 pass tests/vm/page-linear
 pass tests/vm/page-parallel
 pass tests/vm/page-merge-seq
@@ -711,7 +689,7 @@ pass tests/threads/priority-sema
 pass tests/threads/priority-condvar
 pass tests/threads/priority-donate-chain
 FAIL tests/vm/cow/cow-simple
-8 of 141 tests failed.
+7 of 141 tests failed.
 ../../tests/Make.tests:28: recipe for target 'check' failed
 make[1]: *** [check] Error 1
 make[1]: Leaving directory '/workspaces/JUNGLE-Pintos-VM/pintos-kaist/vm/build'
