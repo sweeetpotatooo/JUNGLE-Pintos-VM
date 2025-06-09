@@ -2,9 +2,13 @@
 
 #include "vm/vm.h"
 #include "devices/disk.h"
+#include <bitmap.h>
+#include "threads/vaddr.h"
 
 /* 이 아래 줄을 수정하지 마세요 */
 static struct disk *swap_disk;
+static struct bitmap *swap_table;
+#define SECTORS_PER_PAGE (PGSIZE / DISK_SECTOR_SIZE)
 static bool anon_swap_in(struct page *page, void *kva);
 static bool anon_swap_out(struct page *page);
 static void anon_destroy(struct page *page);
@@ -20,12 +24,12 @@ static const struct page_operations anon_ops = {
 /* 익명 페이지를 위한 데이터를 초기화합니다 */
 void vm_anon_init(void)
 {
-
-    // TODO: swap 구현 시 아래 내용을 추가해야 함. 사유는 그때 가서 이해하기.
-    /* swap_disk를 설정하세요. */
-    // swap_disk = disk_get(1, 1); // NOTE: disk_get 인자값 적절성 검토 완료. 
-    // size_t swap_size = disk_size(swap_disk) / SECTORS_PER_PAGE;
-    // swap_table = bitmap_create(swap_size);
+    /* 스왑 디스크와 스왑 테이블을 초기화합니다. */
+    swap_disk = disk_get(1, 1);
+    if (swap_disk != NULL) {
+        size_t swap_size = disk_size(swap_disk) / SECTORS_PER_PAGE;
+        swap_table = bitmap_create(swap_size);
+    }
 }
 
 // “이 함수는 먼저 page->operations에서 익명 페이지에 대한 핸들러를 설정합니다. 현재 빈 구조체인 anon_page에서
@@ -42,7 +46,7 @@ bool anon_initializer(struct page *page, enum vm_type type, void *kva)
     dprintfb("[anon_initializer] setting anon_ops. %p\n", page->operations);
     
     struct anon_page *anon_page = &page->anon;
-    // TODO: anon_page 속성 추가될 경우 여기서 초기화.
+    anon_page->swap_slot = BITMAP_ERROR;
     dprintfb("[anon_initializer] done. returning true\n");
     return true; 
 }
@@ -51,8 +55,16 @@ bool anon_initializer(struct page *page, enum vm_type type, void *kva)
 static bool
 anon_swap_in(struct page *page, void *kva)
 {
-    // PANIC("anon swap in"); // 분명히 호출히 호출돼야 하잖아.
     struct anon_page *anon_page = &page->anon;
+    if (anon_page->swap_slot == BITMAP_ERROR)
+        return false;
+
+    disk_sector_t sector = anon_page->swap_slot * SECTORS_PER_PAGE;
+    for (size_t i = 0; i < SECTORS_PER_PAGE; i++)
+        disk_read(swap_disk, sector + i, (uint8_t *)kva + DISK_SECTOR_SIZE * i);
+
+    bitmap_reset(swap_table, anon_page->swap_slot);
+    anon_page->swap_slot = BITMAP_ERROR;
     return true;
 }
 
@@ -61,6 +73,17 @@ static bool
 anon_swap_out(struct page *page)
 {
     struct anon_page *anon_page = &page->anon;
+    size_t slot = bitmap_scan_and_flip(swap_table, 0, 1, false);
+    if (slot == BITMAP_ERROR)
+        return false;
+
+    disk_sector_t sector = slot * SECTORS_PER_PAGE;
+    for (size_t i = 0; i < SECTORS_PER_PAGE; i++)
+        disk_write(swap_disk, sector + i,
+                   (uint8_t *)page->frame->kva + DISK_SECTOR_SIZE * i);
+
+    anon_page->swap_slot = slot;
+    page->frame = NULL;
     return true;
 }
 
@@ -69,6 +92,6 @@ static void
 anon_destroy(struct page *page)
 {
     struct anon_page *anon_page = &page->anon;
-    return;
-    // TODO: 여기도 딱히 몰라.
+    if (anon_page->swap_slot != BITMAP_ERROR)
+        bitmap_reset(swap_table, anon_page->swap_slot);
 }
