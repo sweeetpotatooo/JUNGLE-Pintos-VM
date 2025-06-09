@@ -119,9 +119,6 @@ anon_swap_out (struct page *page)
     /* 페이지와 프레임 연결 해제 & 페이지 매핑 제거 */
     pml4_clear_page (thread_current ()->pml4, page->va); /* VA→PA 매핑 삭제 */
     frame->page = NULL;                                  /* 역참조 제거     */
-    list_remove (&frame->frame_elem);
-    free (frame);                                  /* 물리 프레임 반납 */
-
     page->frame = NULL;  /* 논리적으로 “메모리에 없음” 표시 */
 
     return true;

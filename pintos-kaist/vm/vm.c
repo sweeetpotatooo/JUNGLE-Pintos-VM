@@ -215,19 +215,21 @@ static struct frame *
 vm_evict_frame(void)
 {
 	struct frame *victim  = vm_get_victim();
-	if(victim==NULL) return NULL;	
-
+	struct page  *page   = victim->page;
+  ASSERT (page != NULL);
 	struct page *page =victim->page;
-	if (page) {
-		if (!swap_out(page))
-			return NULL;
-		pml4_clear_page(thread_current()->pml4, page->va);
+ if (!swap_out (page))            /* anon_swap_out 등 호출 */
+        PANIC ("swap_out failed");
 
-		page->frame = NULL; // 연결 해제
+    /* 프로세스의 pml4 매핑 해제 */
+    pml4_clear_page (thread_current ()->pml4, page->va);
 
-		return victim;
-	}
-	return NULL;
+    /* 양방향 링크 끊기 ─ 재사용 준비 */
+    page->frame  = NULL;
+    victim->page = NULL;
+
+
+    return victim;  
 
 }
 
