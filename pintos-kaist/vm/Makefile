@@ -12,7 +12,7 @@ debug:
 	make clean && \
 	make -j && \
 	cd ./build && \
-	pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/vm/mmap-kernel:mmap-kernel -p ../../tests/vm/sample.txt:sample.txt --swap-disk=4 -- -q   -f run mmap-kernel
+	pintos -v -k -T 180 -m 10   --fs-disk=10 -p tests/vm/swap-anon:swap-anon --swap-disk=30 -- -q   -f run swap-anon 
 
 .PHONY: zeros
 zeros:

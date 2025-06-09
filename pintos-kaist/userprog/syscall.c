@@ -59,7 +59,7 @@ void check_address(const uint64_t *addr){
 void check_address_writable(const uint64_t *addr)
 {
 	struct page *page = spt_find_page(&thread_current()->spt, addr);
-	if (!page->writable)
+	if (page != NULL && !page->writable)
 	{
 		exit(-1);
 	}
@@ -253,51 +253,59 @@ int filesize(int fd) {
  * @param size: 복사할 크기.
  */
 int read(int fd, void *buffer, unsigned size){
-			check_address(buffer);
-			check_address(buffer + size - 1); 
 	// 1. 주소 범위 검증
-	dprintfe("[read] routine start. \n");
-	check_address(buffer);
+	dprintfe("[read] routine start. 1\n");
+		check_address(buffer);
+		dprintfe("[read] routine start. 2\n");
     check_address(buffer + size-1); 
-	if(!(spt_find_page(&thread_current()->spt, buffer)->writable))
-	{
-		exit(-1);
-	}
-    if (size == 0)
+		dprintfe("[read] routine start.3 \n");
+    if (size == 0){
+				dprintfe("[read] routine start.5 \n");
         return 0;
-    if (buffer == NULL || !is_user_vaddr(buffer))
+		}
+    if (buffer == NULL || !is_user_vaddr(buffer)){
+        dprintfe("[read] routine start. 6\n");
+				exit(-1);
+		}
 
-        exit(-1);
 
     // 2. stdin (fd == 0)일 경우
     if (fd == STDIN_FILENO) {
+				dprintfe("[read] routine start. 7\n");
         unsigned i;
         uint8_t *buf = buffer;
-        for (i = 0; i < size; i++) 
+        for (i = 0; i < size; i++) {
             buf[i] = input_getc();
+						dprintfe("[read] routine start.8 \n");
+				}
         return i;
     }
 
     // 3. fd 범위 검사
-    if (fd < 2 || fd >= FDCOUNT_LIMIT)
+    if (fd < 2 || fd >= FDCOUNT_LIMIT){
+				dprintfe("[read] routine start. 9\n");
         return -1;
+		}
 		
     struct file *file = process_get_file_by_fd(fd);
+		dprintfe("[read] routine start. 10\n");
 		check_address_writable(buffer);
-    if (file == NULL)
+		dprintfe("[read] routine start. 11\n");
+    if (file == NULL){
+				dprintfe("[read] routine start. 12\n");
         return -1; // 해당 파일이 NULL이면 즉시 리턴.
+		}
 
 		struct thread *cur = thread_current();
-      //check_address(addr);
+		dprintfe("[read] routine start. 13\n");
       struct page *page = spt_find_page(&cur->spt, buffer);
-      if(page == NULL || !page->writable) {
-				exit(-1);
-			}
+			dprintfe("[read] routine start. 14\n");
       
     // 4. 정상적인 파일이면 read
     off_t ret;
     lock_acquire(&filesys_lock);
     ret = file_read(file, buffer, size);
+		dprintfe("[read] routine start. 15\n");
     lock_release(&filesys_lock);
     return ret;
 }
@@ -360,6 +368,8 @@ void syscall_init (void) {
 
 /* The main system call interface */
 void syscall_handler (struct intr_frame *f UNUSED) {
+	struct thread *t = thread_current();
+  t->rsp = f->rsp; 
 	int sys_call_number = (int) f->R.rax; // 시스템 콜 번호 받아옴
 	/*
 	 x86-64 규약은 함수가 리턴하는 값을 "rax 레지스터"에 담음. 다른 인자들은 rdi, rsi 등 다른 레지스터로 전달.

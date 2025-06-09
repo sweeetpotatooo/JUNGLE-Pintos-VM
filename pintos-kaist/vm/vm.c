@@ -341,7 +341,7 @@ bool vm_try_handle_fault(struct intr_frame *f, void *addr,
 
 		dprintfg("[vm_try_handle_fault] checking f->rsp: %p\n", f->rsp);
 
-		void *rsp = is_kernel_vaddr(f->rsp) ? thread_current()->rsp : f->rsp;
+		void *rsp = user ? f->rsp : thread_current()->rsp;
 
 		/* DEBUG: 기존 스택 성장 조건은 아래와 같았음.
 		* `if (f->rsp - 8 == addr)`
