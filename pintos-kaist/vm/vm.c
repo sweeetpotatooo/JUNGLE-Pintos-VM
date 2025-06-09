@@ -217,7 +217,6 @@ vm_evict_frame(void)
 	struct frame *victim  = vm_get_victim();
 	struct page  *page   = victim->page;
   ASSERT (page != NULL);
-	struct page *page =victim->page;
  if (!swap_out (page))            /* anon_swap_out 등 호출 */
         PANIC ("swap_out failed");
 
@@ -258,11 +257,13 @@ vm_get_frame(void)
 	ASSERT(frame->page == NULL);
 
 	frame->kva = palloc_get_page(PAL_USER);
-	if (frame->kva == NULL)
-	{
-		free(frame);			  // frame 메타 데이터 자료구조 해제
-		frame = vm_evict_frame();
-	}
+        if (frame->kva == NULL) {
+                frame->kva = palloc_get_page(0);
+        }
+        if (frame->kva == NULL) {
+                free(frame);
+                frame = vm_evict_frame();
+        }
 	ASSERT(frame->kva != NULL);
 	list_push_back (&frame_list, &frame->frame_elem);
 	return frame;
