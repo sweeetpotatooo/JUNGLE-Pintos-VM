@@ -89,7 +89,7 @@ file_backed_swap_out (struct page *page)
      *    − Eviction 목적이므로 반드시 메모리를 돌려준다. */
     pml4_clear_page (curr->pml4, page->va);  /* VA→PA 매핑 제거          */
     page->frame->page = NULL;                /* 역참조 해제               */
-    free (page->frame);                /* 물리 프레임 반환          */
+    palloc_free_page (page->frame->kva);     /* 물리 프레임 반환          */
     page->frame = NULL;                      /* “메모리에 없음” 표시      */
 
     return true;
@@ -114,8 +114,8 @@ file_backed_destroy(struct page *page)
 	struct file_page *file_page = &page->file; 
 	struct pml4 *pml4 = thread_current()->pml4;
 	struct supplemental_page_table *spt = &thread_current()->spt;
-	if (pml4_is_dirty(pml4, page->va))
-	{
+        if (pml4_is_dirty(pml4, page->va))
+        {
 		dprintfg("[file_backed_destroy] writing back. file: %p, size: %d, ofs: %d\n", file_page->file, file_page->size, file_page->file_ofs);
 		// write back
 		// file_write_at (struct file *file, const void *buffer, off_t size, off_t file_ofs) {
@@ -123,7 +123,16 @@ file_backed_destroy(struct page *page)
 		off_t write_bytes = file_write_at(file_page->file, page->va, file_page->size, file_page->file_ofs); // Writes SIZE bytes만큼 쓴다.
 		dprintfg("[file_backed_destroy] writeback txt: %s\n", page->va);
 		dprintfg("[file_backed_destroy] actual writeback bytes: %d\n", write_bytes); // 파일에 잘 써지기까지 한다. reopen 된 별도의 파일 구조체에 쓴게 문제인가?
-	}
+        }
+
+        if (page->frame != NULL)
+        {
+                pml4_clear_page(thread_current()->pml4, page->va);
+                list_remove(&page->frame->elem);
+                palloc_free_page(page->frame->kva);
+                free(page->frame);
+                page->frame = NULL;
+        }
 	
 	/* 
 	* DEBUG: spt_remove_page를 여기서 호출하면 중복이다. 위의 주석을 참조.

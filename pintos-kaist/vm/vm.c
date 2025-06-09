@@ -12,14 +12,20 @@
 #include "userprog/process.h"
 #include <string.h>
 #include "filesys/file.h"
+#include "threads/synch.h"
+#include <list.h>
 
 struct lazy_load_args
 {
-	struct file *file;
-	off_t ofs;
-	size_t page_read_bytes;
-	size_t zero_bytes;
+        struct file *file;
+        off_t ofs;
+        size_t page_read_bytes;
+        size_t zero_bytes;
 };
+
+/* Frame table and its lock */
+static struct list frame_table;
+static struct lock frame_table_lock;
 
 /* 가상 메모리 서브시스템을 초기화합니다.
  * 각 서브시스템의 초기화 코드를 호출합니다. */
@@ -28,11 +34,12 @@ void vm_init(void)
 	vm_anon_init();
 	vm_file_init();
 #ifdef EFILESYS /* Project 4용 */
-	pagecache_init();
+        pagecache_init();
 #endif
-	register_inspect_intr();
-	/* 이 위의 코드는 수정하지 마세요. */
-	/* TODO: 여기에 여러분의 코드를 작성하세요. */
+        register_inspect_intr();
+        /* 이 위의 코드는 수정하지 마세요. */
+        list_init(&frame_table);
+        lock_init(&frame_table_lock);
 }
 
 /* 페이지의 타입을 가져옵니다.
@@ -186,20 +193,24 @@ bool spt_insert_page(struct supplemental_page_table *spt,
 
 void spt_remove_page(struct supplemental_page_table *spt, struct page *page)
 {
-	hash_delete(&spt, &page->hash_elem);
-	vm_dealloc_page(page);
-
-	return true;
+        hash_delete(&spt->hash, &page->hash_elem);
+        vm_dealloc_page(page);
 }
 
 /* 교체될 프레임(struct frame)을 선택하여 가져옵니다. */
 static struct frame *
 vm_get_victim(void)
 {
-	struct frame *victim = NULL;
-	/* TODO: 페이지 교체 정책은 여러분이 결정할 수 있습니다. */
+        struct frame *victim = NULL;
 
-	return victim;
+        lock_acquire(&frame_table_lock);
+        if (!list_empty(&frame_table)) {
+                struct list_elem *e = list_pop_front(&frame_table);
+                victim = list_entry(e, struct frame, elem);
+        }
+        lock_release(&frame_table_lock);
+
+        return victim;
 }
 
 /* 하나의 페이지를 교체하고 해당 프레임을 반환합니다.
@@ -207,10 +218,22 @@ vm_get_victim(void)
 static struct frame *
 vm_evict_frame(void)
 {
-	struct frame *victim UNUSED = vm_get_victim();
-	/* TODO: victim을 스왑 아웃하고 교체된 프레임을 반환하세요. */
+        struct frame *victim = vm_get_victim();
+        if (victim == NULL)
+                return NULL;
 
-	return NULL;
+        if (victim->page != NULL)
+                swap_out(victim->page);
+
+        palloc_free_page(victim->kva);
+        victim->kva = palloc_get_page(PAL_USER);
+        victim->page = NULL;
+
+        lock_acquire(&frame_table_lock);
+        list_push_back(&frame_table, &victim->elem);
+        lock_release(&frame_table_lock);
+
+        return victim;
 }
 
 /* Gets a new physical page from the user pool by calling palloc_get_page.
@@ -226,25 +249,26 @@ vm_evict_frame(void)
 static struct frame *
 vm_get_frame(void)
 {
-	struct frame *frame = malloc(sizeof(struct frame));
+        struct frame *frame = malloc(sizeof(struct frame));
 
-	if (frame == NULL)
-	{
-		PANIC("TODO");
-	}
+        if (frame == NULL)
+                PANIC("frame alloc fail");
 
-	// NOTE: PAL_USER인 이유는 주석에 user space pages를 본 함수로 할당받아야 한다고 명시되어 있어서 이렇게 함. 악성 프로그램이 고의로 커널풀 메모리 고갈시키는 거 막기 위한 분리.
-	frame->page = NULL;
-	ASSERT(frame->page == NULL);
+        frame->page = NULL;
 
-	frame->kva = palloc_get_page(PAL_USER);
-	if (frame->kva == NULL)
-	{
-		free(frame);			  // frame 메타 데이터 자료구조 해제
-		frame = vm_evict_frame(); // TODO: evict frame 함수가 아직 구현되지 않음.
-	}
-	ASSERT(frame->kva != NULL);
-	return frame;
+        lock_acquire(&frame_table_lock);
+        frame->kva = palloc_get_page(PAL_USER);
+        if (frame->kva == NULL)
+        {
+                free(frame);
+                lock_release(&frame_table_lock);
+                frame = vm_evict_frame();
+                return frame;
+        }
+        list_push_back(&frame_table, &frame->elem);
+        lock_release(&frame_table_lock);
+
+        return frame;
 }
 
 /* 스택 확장 */

@@ -119,9 +119,8 @@ anon_swap_out (struct page *page)
     /* 페이지와 프레임 연결 해제 & 페이지 매핑 제거 */
     pml4_clear_page (thread_current ()->pml4, page->va); /* VA→PA 매핑 삭제 */
     frame->page = NULL;                                  /* 역참조 제거     */
-    free (frame);                                  /* 물리 프레임 반납 */
-
-    page->frame = NULL;  /* 논리적으로 “메모리에 없음” 표시 */
+    palloc_free_page (frame->kva);                       /* 물리 프레임 반납 */
+    page->frame = NULL;                                  /* 논리적으로 메모리에 없음 표시 */
 
     return true;
 }
@@ -157,6 +156,8 @@ anon_destroy (struct page *page)
         /* 역참조 해제 */
         page->frame->page = NULL;
         /* 물리 프레임 반환 */
+        list_remove (&page->frame->elem);
+        palloc_free_page (page->frame->kva);
         free (page->frame);
         page->frame = NULL;
     }
