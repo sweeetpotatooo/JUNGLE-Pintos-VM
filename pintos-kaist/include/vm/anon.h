@@ -10,7 +10,7 @@
 * to store necessary information or state of an anonymous page as you implement.  */
 struct anon_page {
     struct page *page; 
-    // int swap_index; //  스왑 디스크에서 해당 페이지가 저장된 위치를 나타내는 인덱스니다.
+    int swap_index; //  스왑 디스크에서 해당 페이지가 저장된 위치를 나타내는 인덱스니다.
     // HACK: 추가적인 멤버 추가 필요
     
 };

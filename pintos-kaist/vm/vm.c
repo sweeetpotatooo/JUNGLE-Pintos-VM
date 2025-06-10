@@ -27,6 +27,7 @@ void vm_init(void)
 {
 	vm_anon_init();
 	vm_file_init();
+	list_init(&frame_list);
 #ifdef EFILESYS /* Project 4용 */
 	pagecache_init();
 #endif
@@ -196,8 +197,13 @@ void spt_remove_page(struct supplemental_page_table *spt, struct page *page)
 static struct frame *
 vm_get_victim(void)
 {
-	struct frame *victim = NULL;
-	/* TODO: 페이지 교체 정책은 여러분이 결정할 수 있습니다. */
+	struct frame *victim;
+	/* TODO: 교체 정책을 여기서 구현해서 희생자 페이지 찾기 */
+
+	ASSERT(list_empty(&frame_list) == false);
+
+	victim = list_entry(list_pop_front(&frame_list), struct frame, frame_elem);
+	ASSERT(victim != NULL);
 
 	return victim;
 }
@@ -207,10 +213,23 @@ vm_get_victim(void)
 static struct frame *
 vm_evict_frame(void)
 {
-	struct frame *victim UNUSED = vm_get_victim();
-	/* TODO: victim을 스왑 아웃하고 교체된 프레임을 반환하세요. */
+	dprintfh("pivot1\n");
+	struct frame *victim = vm_get_victim();
+	dprintfh("pivot2\n");
+	struct page *page = victim->page;
+	ASSERT(page != NULL);
+	if (!swap_out(page)) /* anon_swap_out 등 호출 */
+		PANIC("swap_out failed");
 
-	return NULL;
+	/* 프로세스의 pml4 매핑 해제 */
+	pml4_clear_page(thread_current()->pml4, page->va);
+	dprintfh("pivot3\n");
+	/* 양방향 링크 끊기 ─ 재사용 준비 */
+	page->frame = NULL;
+	victim->page = NULL;
+
+	dprintfh("pivot4\n");
+	return victim;
 }
 
 /* Gets a new physical page from the user pool by calling palloc_get_page.
@@ -227,10 +246,17 @@ static struct frame *
 vm_get_frame(void)
 {
 	struct frame *frame = malloc(sizeof(struct frame));
+	dprintfh("pivot5\n");
 
 	if (frame == NULL)
 	{
-		PANIC("TODO");
+		frame = vm_evict_frame();
+		dprintfh("pivot6\n");
+		if (frame == NULL)
+			PANIC("frame alloc & eviction both failed");
+		list_push_back(&frame_list, &frame->frame_elem);
+		dprintfh("pivot7\n");
+		return frame;
 	}
 
 	// NOTE: PAL_USER인 이유는 주석에 user space pages를 본 함수로 할당받아야 한다고 명시되어 있어서 이렇게 함. 악성 프로그램이 고의로 커널풀 메모리 고갈시키는 거 막기 위한 분리.
@@ -238,12 +264,16 @@ vm_get_frame(void)
 	ASSERT(frame->page == NULL);
 
 	frame->kva = palloc_get_page(PAL_USER);
+	dprintfh("pivot8\n");
+
 	if (frame->kva == NULL)
 	{
-		free(frame);			  // frame 메타 데이터 자료구조 해제
-		frame = vm_evict_frame(); // TODO: evict frame 함수가 아직 구현되지 않음.
+		free(frame);
+		frame = vm_evict_frame();
 	}
 	ASSERT(frame->kva != NULL);
+	list_push_back(&frame_list, &frame->frame_elem);
+	dprintfh("pivot9\n");
 	return frame;
 }
 
@@ -344,9 +374,9 @@ bool vm_try_handle_fault(struct intr_frame *f, void *addr,
 		void *rsp = user ? f->rsp : thread_current()->rsp;
 
 		/* DEBUG: 기존 스택 성장 조건은 아래와 같았음.
-		* `if (f->rsp - 8 == addr)`
-		* 차이점: f->rsp가 페이지 폴트 발생 위치보다 위에 있을 경우를 고려하지 않았음.
-		*/
+		 * `if (f->rsp - 8 == addr)`
+		 * 차이점: f->rsp가 페이지 폴트 발생 위치보다 위에 있을 경우를 고려하지 않았음.
+		 */
 
 		if (addr >= rsp - 8 && addr < USER_STACK && addr >= STACK_MAX) // 합법적인 스택 확장 요청인지 판단. user stack의 최대 크기인 1MB를 초과하지 않는지 check
 		{
@@ -360,7 +390,6 @@ bool vm_try_handle_fault(struct intr_frame *f, void *addr,
 			page = spt_find_page(spt, addr); // page를 null로 설정해. stack growth 경우에는 spt 찾을 필요 없지 않나? 어차피 없을텐데.
 			return vm_do_claim_page(page);	 // 그 페이지에 대응하는 프레임을 할당받아.
 		}
-
 	}
 	else
 	{
@@ -469,59 +498,65 @@ spt_destroy_page_in_copy_failure(struct hash_elem *e, void *aux UNUSED)
 	vm_dealloc_page(p);
 }
 
-bool
-supplemental_page_table_copy (struct supplemental_page_table *dst,
-                              struct supplemental_page_table *src)
+bool supplemental_page_table_copy(struct supplemental_page_table *dst,
+								  struct supplemental_page_table *src)
 {
-    struct hash_iterator i;
-    hash_first (&i, &src->hash);
+	struct hash_iterator i;
+	hash_first(&i, &src->hash);
 
-    while (hash_next (&i)) {
-        struct page *src_page = hash_entry (hash_cur (&i), struct page, hash_elem);
-        enum vm_type type     = page_get_type (src_page);
-        void *upage           = src_page->va;
-        bool writable         = src_page->writable;
+	while (hash_next(&i))
+	{
+		struct page *src_page = hash_entry(hash_cur(&i), struct page, hash_elem);
+		enum vm_type type = page_get_type(src_page);
+		void *upage = src_page->va;
+		bool writable = src_page->writable;
 
-        if (type == VM_UNINIT) {
-            vm_initializer *init = src_page->uninit.init;
-            void *aux            = src_page->uninit.aux;
-            if (!vm_alloc_page_with_initializer (src_page->uninit.type, upage, writable, init, aux))
-                return false;
-            continue;
-        }
+		if (type == VM_UNINIT)
+		{
+			vm_initializer *init = src_page->uninit.init;
+			void *aux = src_page->uninit.aux;
+			if (!vm_alloc_page_with_initializer(src_page->uninit.type, upage, writable, init, aux))
+				return false;
+			continue;
+		}
 
-        if (type == VM_FILE) {
-            struct lazy_aux_file_backed *aux = malloc (sizeof *aux);
-            if (aux == NULL) return false;
+		if (type == VM_FILE)
+		{
+			struct lazy_aux_file_backed *aux = malloc(sizeof *aux);
+			if (aux == NULL)
+				return false;
 
-            aux->length   = src_page->file.cnt;            /* 실제로 읽어올 바이트 수   */
-            aux->writable = writable;
-            aux->file     = file_reopen (src_page->file.file);
-            aux->offset   = src_page->file.file_ofs;       /* 파일 내 오프셋            */
-            aux->cnt      = src_page->file.cnt;            /* 페이지 내 유효 바이트 수   */
+			aux->length = src_page->file.cnt; /* 실제로 읽어올 바이트 수   */
+			aux->writable = writable;
+			aux->file = file_reopen(src_page->file.file);
+			aux->offset = src_page->file.file_ofs; /* 파일 내 오프셋            */
+			aux->cnt = src_page->file.cnt;		   /* 페이지 내 유효 바이트 수   */
 
-            if (!vm_alloc_page_with_initializer (VM_FILE, upage,writable,lazy_load_file_backed, aux)) {
-                free (aux);
-                return false;
-            }
-        }
+			if (!vm_alloc_page_with_initializer(VM_FILE, upage, writable, lazy_load_file_backed, aux))
+			{
+				free(aux);
+				return false;
+			}
+		}
 
-        if (type == VM_ANON) {
-            if (!vm_alloc_page_with_initializer (VM_ANON, upage,
-                                                 writable,
-                                                 NULL, NULL))
-                return false;
-        }
+		if (type == VM_ANON)
+		{
+			if (!vm_alloc_page_with_initializer(VM_ANON, upage,
+												writable,
+												NULL, NULL))
+				return false;
+		}
 
-        struct page *dst_page = spt_find_page (dst, upage);
-        if (!vm_claim_page (upage))
-            return false;
+		struct page *dst_page = spt_find_page(dst, upage);
+		if (!vm_claim_page(upage))
+			return false;
 
-        if (src_page->frame != NULL) {
-            memcpy (dst_page->frame->kva, src_page->frame->kva, PGSIZE);
-        }
-    }
-    return true;
+		if (src_page->frame != NULL)
+		{
+			memcpy(dst_page->frame->kva, src_page->frame->kva, PGSIZE);
+		}
+	}
+	return true;
 }
 
 /* supplemental page table이 가지고 있는 리소스를 해제합니다. */

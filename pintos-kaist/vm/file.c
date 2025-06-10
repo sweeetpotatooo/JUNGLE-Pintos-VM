@@ -55,12 +55,46 @@ file_backed_swap_in(struct page *page, void *kva)
 }
 
 /* Swap out the page by writeback contents to the file. */
+/* Swap out the page by write-back contents to the file. */
 static bool
-file_backed_swap_out(struct page *page)
+file_backed_swap_out (struct page *page)
 {
-        struct file_page *file_page UNUSED = &page->file;
-        return true;
+    if (page == NULL || page->frame == NULL)
+        return false;
+
+    struct file_page *file_page = &page->file;
+    struct thread    *curr      = thread_current ();
+
+    /* 페이지가 수정(Dirty)되었는지 확인
+     *    − 사용자 영역에서 한 번이라도 쓰기(Write)가 발생하면
+     *      PML4 Dirty 비트가 1이 됨. */
+    bool is_dirty = pml4_is_dirty (curr->pml4, page->va) ||
+                    pml4_is_dirty (curr->pml4, page->frame->kva);
+
+    /* Dirty 페이지라면 파일에 Write-back */
+    if (is_dirty)
+    {
+        off_t offset = file_page->file_ofs;
+        size_t bytes = file_page->size;
+
+        if ((int) bytes != file_write_at (file_page->file,page->frame->kva,bytes,offset))
+            return false;                    /* write 실패 → swap-out 실패 */
+
+        /* Dirty 비트를 0으로 초기화해 “정상 동기화” 상태 표시 */
+        pml4_set_dirty (curr->pml4, page->va, false);
+        pml4_set_dirty (curr->pml4, page->frame->kva, false);
+    }
+
+    /* 물리 프레임 회수 및 매핑 해제
+     *    − Eviction 목적이므로 반드시 메모리를 돌려준다. */
+    pml4_clear_page (curr->pml4, page->va);  /* VA→PA 매핑 제거          */
+    page->frame->page = NULL;                /* 역참조 해제              */
+    free (page->frame);                			 /* 물리 프레임 반환          */
+    page->frame = NULL;                      /* “메모리에 없음” 표시      */
+
+    return true;
 }
+
 
 /* Destory the file backed page. PAGE will be freed by the caller. */
 static void

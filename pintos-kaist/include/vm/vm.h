@@ -78,6 +78,7 @@ struct page { // page 메타 데이터고 va가 실제 할당된 페이지 주�
 struct frame {
 	void *kva;          /* 커널 가상 주소 */
 	struct page *page;  /* 매핑된 페이지 */
+	struct list_elem frame_elem;
 };
 
 /* ─────────────────────────────────────────────
@@ -92,6 +93,7 @@ struct page_operations {
 	enum vm_type type;                        /* 페이지 유형 */
 };
 
+struct list frame_list;
 /* 매크로 헬퍼 */
 #define swap_in(page, v) (page)->operations->swap_in  ((page), (v))
 #define swap_out(page)   (page)->operations->swap_out (page)

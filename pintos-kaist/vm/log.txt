@@ -220,19 +220,99 @@ perl -I../.. ../../tests/vm/page-parallel.ck tests/vm/page-parallel tests/vm/pag
 pass tests/vm/page-parallel
 pintos -v -k -T 600 -m 20   --fs-disk=10 -p tests/vm/page-merge-seq:page-merge-seq -p tests/vm/child-sort:child-sort --swap-disk=4 -- -q   -f run page-merge-seq < /dev/null 2> tests/vm/page-merge-seq.errors > tests/vm/page-merge-seq.output
 perl -I../.. ../../tests/vm/page-merge-seq.ck tests/vm/page-merge-seq tests/vm/page-merge-seq.result
-pass tests/vm/page-merge-seq
+FAIL tests/vm/page-merge-seq
+Kernel panic in run: PANIC at ../../userprog/exception.c:97 in kill(): Kernel bug - unexpected interrupt in kernel
+Call stack: 0x8004218043 0x800421cd68 0x8004209026 0x8004209444 0x80042188fe 0x8004221038 0x80042210a5 0x80042212d0 0x800422159e 0x800422156e 0x80042219b6 0x800421bb05 0x80042079b1
+Translation of call stack:
+0x0000008004218043: debug_panic (lib/kernel/debug.c:32)
+0x000000800421cd68: kill (userprog/exception.c:103)
+0x0000008004209026: intr_handler (threads/interrupt.c:352)
+0x0000008004209444: intr_entry (threads/intr-stubs.o:?)
+0x00000080042188fe: list_pop_front (lib/kernel/list.c:254)
+0x0000008004221038: vm_get_victim (vm/vm.c:205)
+0x00000080042210a5: vm_evict_frame (vm/vm.c:217)
+0x00000080042212d0: vm_get_frame (vm/vm.c:275)
+0x000000800422159e: vm_do_claim_page (vm/vm.c:449)
+0x000000800422156e: vm_claim_page (vm/vm.c:433)
+0x00000080042219b6: supplemental_page_table_copy (vm/vm.c:554)
+0x000000800421bb05: __do_fork (userprog/process.c:254)
+0x00000080042079b1: kernel_thread (threads/thread.c:566)
 pintos -v -k -T 600 -m 20   --fs-disk=10 -p tests/vm/page-merge-par:page-merge-par -p tests/vm/child-sort:child-sort --swap-disk=10 -- -q   -f run page-merge-par < /dev/null 2> tests/vm/page-merge-par.errors > tests/vm/page-merge-par.output
 perl -I../.. ../../tests/vm/page-merge-par.ck tests/vm/page-merge-par tests/vm/page-merge-par.result
 FAIL tests/vm/page-merge-par
-run: wait for child 0: FAILED
+Kernel panic in run: PANIC at ../../userprog/exception.c:97 in kill(): Kernel bug - unexpected interrupt in kernel
+Call stack: 0x8004218043 0x800421cd68 0x8004209026 0x8004209444 0x80042188fe 0x8004221038 0x80042210a5 0x80042212d0 0x800422159e 0x800422156e 0x80042219b6 0x800421bb05 0x80042079b1
+Translation of call stack:
+0x0000008004218043: debug_panic (lib/kernel/debug.c:32)
+0x000000800421cd68: kill (userprog/exception.c:103)
+0x0000008004209026: intr_handler (threads/interrupt.c:352)
+0x0000008004209444: intr_entry (threads/intr-stubs.o:?)
+0x00000080042188fe: list_pop_front (lib/kernel/list.c:254)
+0x0000008004221038: vm_get_victim (vm/vm.c:205)
+0x00000080042210a5: vm_evict_frame (vm/vm.c:217)
+0x00000080042212d0: vm_get_frame (vm/vm.c:275)
+0x000000800422159e: vm_do_claim_page (vm/vm.c:449)
+0x000000800422156e: vm_claim_page (vm/vm.c:433)
+0x00000080042219b6: supplemental_page_table_copy (vm/vm.c:554)
+0x000000800421bb05: __do_fork (userprog/process.c:254)
+0x00000080042079b1: kernel_thread (threads/thread.c:566)
 pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/vm/page-merge-stk:page-merge-stk -p tests/vm/child-qsort:child-qsort --swap-disk=10 -- -q   -f run page-merge-stk < /dev/null 2> tests/vm/page-merge-stk.errors > tests/vm/page-merge-stk.output
 perl -I../.. ../../tests/vm/page-merge-stk.ck tests/vm/page-merge-stk tests/vm/page-merge-stk.result
 FAIL tests/vm/page-merge-stk
-run: wait for child 0: FAILED
+Test output failed to match any acceptable form.
+
+Acceptable output:
+  (page-merge-stk) begin
+  (page-merge-stk) init
+  (page-merge-stk) sort chunk 0
+  (page-merge-stk) sort chunk 1
+  (page-merge-stk) sort chunk 2
+  (page-merge-stk) sort chunk 3
+  (page-merge-stk) sort chunk 4
+  (page-merge-stk) sort chunk 5
+  (page-merge-stk) sort chunk 6
+  (page-merge-stk) sort chunk 7
+  (page-merge-stk) wait for child 0
+  (page-merge-stk) wait for child 1
+  (page-merge-stk) wait for child 2
+  (page-merge-stk) wait for child 3
+  (page-merge-stk) wait for child 4
+  (page-merge-stk) wait for child 5
+  (page-merge-stk) wait for child 6
+  (page-merge-stk) wait for child 7
+  (page-merge-stk) merge
+  (page-merge-stk) verify
+  (page-merge-stk) success, buf_idx=1,048,576
+  (page-merge-stk) end
+Differences in `diff -u' format:
+  (page-merge-stk) begin
+  (page-merge-stk) init
+  (page-merge-stk) sort chunk 0
+  (page-merge-stk) sort chunk 1
+  (page-merge-stk) sort chunk 2
+- (page-merge-stk) sort chunk 3
+- (page-merge-stk) sort chunk 4
+- (page-merge-stk) sort chunk 5
+- (page-merge-stk) sort chunk 6
+- (page-merge-stk) sort chunk 7
+- (page-merge-stk) wait for child 0
+- (page-merge-stk) wait for child 1
+- (page-merge-stk) wait for child 2
+- (page-merge-stk) wait for child 3
+- (page-merge-stk) wait for child 4
+- (page-merge-stk) wait for child 5
+- (page-merge-stk) wait for child 6
+- (page-merge-stk) wait for child 7
+- (page-merge-stk) merge
+- (page-merge-stk) verify
+- (page-merge-stk) success, buf_idx=1,048,576
+- (page-merge-stk) end
+
+(Process exit codes are excluded for matching purposes.)
 pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/vm/page-merge-mm:page-merge-mm -p tests/vm/child-qsort-mm:child-qsort-mm --swap-disk=10 -- -q   -f run page-merge-mm < /dev/null 2> tests/vm/page-merge-mm.errors > tests/vm/page-merge-mm.output
 perl -I../.. ../../tests/vm/page-merge-mm.ck tests/vm/page-merge-mm tests/vm/page-merge-mm.result
 FAIL tests/vm/page-merge-mm
-run: wait for child 0: FAILED
+run: open "buf2": FAILED
 pintos -v -k -T 600 -m 20   --fs-disk=10 -p tests/vm/page-shuffle:page-shuffle --swap-disk=4 -- -q   -f run page-shuffle < /dev/null 2> tests/vm/page-shuffle.errors > tests/vm/page-shuffle.output
 perl -I../.. ../../tests/vm/page-shuffle.ck tests/vm/page-shuffle tests/vm/page-shuffle.result
 pass tests/vm/page-shuffle
@@ -248,7 +328,7 @@ pass tests/vm/mmap-unmap
 dd if=/dev/zero of=tests/vm/zeros bs=1024 count=6
 6+0 records in
 6+0 records out
-6144 bytes (6.1 kB, 6.0 KiB) copied, 0.00122968 s, 5.0 MB/s
+6144 bytes (6.1 kB, 6.0 KiB) copied, 0.00109037 s, 5.6 MB/s
 pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/vm/mmap-overlap:mmap-overlap -p tests/vm/zeros:zeros --swap-disk=4 -- -q   -f run mmap-overlap < /dev/null 2> tests/vm/mmap-overlap.errors > tests/vm/mmap-overlap.output
 perl -I../.. ../../tests/vm/mmap-overlap.ck tests/vm/mmap-overlap tests/vm/mmap-overlap.result
 pass tests/vm/mmap-overlap
@@ -324,133 +404,59 @@ pass tests/vm/lazy-anon
 pintos -v -k -T 180 -m 8   --fs-disk=10 -p tests/vm/swap-file:swap-file -p ../../tests/vm/large.txt:large.txt --swap-disk=10 -- -q   -f run swap-file < /dev/null 2> tests/vm/swap-file.errors > tests/vm/swap-file.output
 perl -I../.. ../../tests/vm/swap-file.ck tests/vm/swap-file tests/vm/swap-file.result
 FAIL tests/vm/swap-file
-Test output failed to match any acceptable form.
-
-Acceptable output:
-  (swap-file) begin
-  (swap-file) open "large.txt"
-  (swap-file) mmap "large.txt"
-  (swap-file) end
-Differences in `diff -u' format:
-  (swap-file) begin
-  (swap-file) open "large.txt"
-  (swap-file) mmap "large.txt"
-- (swap-file) end
-
-(Process exit codes are excluded for matching purposes.)
+Kernel panic in run: PANIC at ../../threads/mmu.c:235 in pml4_set_page(): assertion `pg_ofs (kpage) == 0' failed.
+Call stack: 0x8004218043 0x800420d0e6 0x8004221672 0x800422147a 0x800421ce5f 0x8004209026 0x8004209444 0x400228 0x400d85 0x400dce
+Translation of call stack:
+0x0000008004218043: debug_panic (lib/kernel/debug.c:32)
+0x000000800420d0e6: pml4_set_page (threads/mmu.c:236)
+0x0000008004221672: vm_do_claim_page (vm/vm.c:459)
+0x000000800422147a: vm_try_handle_fault (vm/vm.c:394)
+0x000000800421ce5f: page_fault (userprog/exception.c:149)
+0x0000008004209026: intr_handler (threads/interrupt.c:352)
+0x0000008004209444: intr_entry (threads/intr-stubs.o:?)
+0x0000000000400228: (unknown)
+0x0000000000400d85: (unknown)
+0x0000000000400dce: (unknown)
 pintos -v -k -T 180 -m 10   --fs-disk=10 -p tests/vm/swap-anon:swap-anon --swap-disk=30 -- -q   -f run swap-anon < /dev/null 2> tests/vm/swap-anon.errors > tests/vm/swap-anon.output
 perl -I../.. ../../tests/vm/swap-anon.ck tests/vm/swap-anon tests/vm/swap-anon.result
-FAIL tests/vm/swap-anon
-Test output failed to match any acceptable form.
-
-Acceptable output:
-  (swap-anon) begin
-  (swap-anon) write sparsely over page 0
-  (swap-anon) write sparsely over page 512
-  (swap-anon) write sparsely over page 1024
-  (swap-anon) write sparsely over page 1536
-  (swap-anon) write sparsely over page 2048
-  (swap-anon) write sparsely over page 2560
-  (swap-anon) write sparsely over page 3072
-  (swap-anon) write sparsely over page 3584
-  (swap-anon) write sparsely over page 4096
-  (swap-anon) write sparsely over page 4608
-  (swap-anon) check consistency in page 0
-  (swap-anon) check consistency in page 512
-  (swap-anon) check consistency in page 1024
-  (swap-anon) check consistency in page 1536
-  (swap-anon) check consistency in page 2048
-  (swap-anon) check consistency in page 2560
-  (swap-anon) check consistency in page 3072
-  (swap-anon) check consistency in page 3584
-  (swap-anon) check consistency in page 4096
-  (swap-anon) check consistency in page 4608
-  (swap-anon) end
-Differences in `diff -u' format:
-  (swap-anon) begin
-  (swap-anon) write sparsely over page 0
-  (swap-anon) write sparsely over page 512
-  (swap-anon) write sparsely over page 1024
-- (swap-anon) write sparsely over page 1536
-- (swap-anon) write sparsely over page 2048
-- (swap-anon) write sparsely over page 2560
-- (swap-anon) write sparsely over page 3072
-- (swap-anon) write sparsely over page 3584
-- (swap-anon) write sparsely over page 4096
-- (swap-anon) write sparsely over page 4608
-- (swap-anon) check consistency in page 0
-- (swap-anon) check consistency in page 512
-- (swap-anon) check consistency in page 1024
-- (swap-anon) check consistency in page 1536
-- (swap-anon) check consistency in page 2048
-- (swap-anon) check consistency in page 2560
-- (swap-anon) check consistency in page 3072
-- (swap-anon) check consistency in page 3584
-- (swap-anon) check consistency in page 4096
-- (swap-anon) check consistency in page 4608
-- (swap-anon) end
-
-(Process exit codes are excluded for matching purposes.)
+pass tests/vm/swap-anon
 pintos -v -k -T 180 -m 10   --fs-disk=10 -p tests/vm/swap-iter:swap-iter -p ../../tests/vm/large.txt:large.txt --swap-disk=50 -- -q   -f run swap-iter < /dev/null 2> tests/vm/swap-iter.errors > tests/vm/swap-iter.output
 perl -I../.. ../../tests/vm/swap-iter.ck tests/vm/swap-iter tests/vm/swap-iter.result
 FAIL tests/vm/swap-iter
-Test output failed to match any acceptable form.
-
-Acceptable output:
-  (swap-iter) begin
-  (swap-iter) write sparsely over page 0
-  (swap-iter) write sparsely over page 512
-  (swap-iter) write sparsely over page 1024
-  (swap-iter) write sparsely over page 1536
-  (swap-iter) write sparsely over page 2048
-  (swap-iter) write sparsely over page 2560
-  (swap-iter) write sparsely over page 3072
-  (swap-iter) write sparsely over page 3584
-  (swap-iter) write sparsely over page 4096
-  (swap-iter) write sparsely over page 4608
-  (swap-iter) open "large.txt"
-  (swap-iter) mmap "large.txt"
-  (swap-iter) check consistency in page 0
-  (swap-iter) check consistency in page 512
-  (swap-iter) check consistency in page 1024
-  (swap-iter) check consistency in page 1536
-  (swap-iter) check consistency in page 2048
-  (swap-iter) check consistency in page 2560
-  (swap-iter) check consistency in page 3072
-  (swap-iter) check consistency in page 3584
-  (swap-iter) check consistency in page 4096
-  (swap-iter) check consistency in page 4608
-  (swap-iter) end
-Differences in `diff -u' format:
-  (swap-iter) begin
-  (swap-iter) write sparsely over page 0
-  (swap-iter) write sparsely over page 512
-  (swap-iter) write sparsely over page 1024
-- (swap-iter) write sparsely over page 1536
-- (swap-iter) write sparsely over page 2048
-- (swap-iter) write sparsely over page 2560
-- (swap-iter) write sparsely over page 3072
-- (swap-iter) write sparsely over page 3584
-- (swap-iter) write sparsely over page 4096
-- (swap-iter) write sparsely over page 4608
-- (swap-iter) open "large.txt"
-- (swap-iter) mmap "large.txt"
-- (swap-iter) check consistency in page 0
-- (swap-iter) check consistency in page 512
-- (swap-iter) check consistency in page 1024
-- (swap-iter) check consistency in page 1536
-- (swap-iter) check consistency in page 2048
-- (swap-iter) check consistency in page 2560
-- (swap-iter) check consistency in page 3072
-- (swap-iter) check consistency in page 3584
-- (swap-iter) check consistency in page 4096
-- (swap-iter) check consistency in page 4608
-- (swap-iter) end
-
-(Process exit codes are excluded for matching purposes.)
+Kernel panic in run: PANIC at ../../threads/mmu.c:235 in pml4_set_page(): assertion `pg_ofs (kpage) == 0' failed.
+Call stack: 0x8004218043 0x800420d0e6 0x8004221672 0x800422147a 0x800421ce5f 0x8004209026 0x8004209444 0x400e2e 0x400e77
+Translation of call stack:
+0x0000008004218043: debug_panic (lib/kernel/debug.c:32)
+0x000000800420d0e6: pml4_set_page (threads/mmu.c:236)
+0x0000008004221672: vm_do_claim_page (vm/vm.c:459)
+0x000000800422147a: vm_try_handle_fault (vm/vm.c:394)
+0x000000800421ce5f: page_fault (userprog/exception.c:149)
+0x0000008004209026: intr_handler (threads/interrupt.c:352)
+0x0000008004209444: intr_entry (threads/intr-stubs.o:?)
+0x0000000000400e2e: (unknown)
+0x0000000000400e77: (unknown)
 pintos -v -k -T 600 -m 40   --fs-disk=10 -p tests/vm/swap-fork:swap-fork -p tests/vm/child-swap:child-swap --swap-disk=200 -- -q   -f run swap-fork < /dev/null 2> tests/vm/swap-fork.errors > tests/vm/swap-fork.output
 perl -I../.. ../../tests/vm/swap-fork.ck tests/vm/swap-fork tests/vm/swap-fork.result
-pass tests/vm/swap-fork
+FAIL tests/vm/swap-fork
+Kernel panic in run: PANIC at ../../userprog/exception.c:97 in kill(): Kernel bug - unexpected interrupt in kernel
+Call stack: 0x8004218043 0x800421cd68 0x8004209026 0x8004209444 0x80042188fe 0x8004221038 0x80042210a5 0x80042212d0 0x800422159e 0x800422156e 0x800421c9bd 0x800421c549 0x800421be9b 0x800421d20e 0x800421d81d 0x800421cee9
+Translation of call stack:
+0x0000008004218043: debug_panic (lib/kernel/debug.c:32)
+0x000000800421cd68: kill (userprog/exception.c:103)
+0x0000008004209026: intr_handler (threads/interrupt.c:352)
+0x0000008004209444: intr_entry (threads/intr-stubs.o:?)
+0x00000080042188fe: list_pop_front (lib/kernel/list.c:254)
+0x0000008004221038: vm_get_victim (vm/vm.c:205)
+0x00000080042210a5: vm_evict_frame (vm/vm.c:217)
+0x00000080042212d0: vm_get_frame (vm/vm.c:275)
+0x000000800422159e: vm_do_claim_page (vm/vm.c:449)
+0x000000800422156e: vm_claim_page (vm/vm.c:433)
+0x000000800421c9bd: setup_stack (userprog/process.c:956)
+0x000000800421c549: load (userprog/process.c:662)
+0x000000800421be9b: process_exec (userprog/process.c:367)
+0x000000800421d20e: exec (userprog/syscall.c:159)
+0x000000800421d81d: syscall_handler (userprog/syscall.c:393)
+0x000000800421cee9: no_sti (userprog/syscall-entry.o:?)
 pintos -v -k -T 60 -m 20   --fs-disk=10 -p tests/filesys/base/lg-create:lg-create --swap-disk=4 -- -q   -f run lg-create < /dev/null 2> tests/filesys/base/lg-create.errors > tests/filesys/base/lg-create.output
 perl -I../.. ../../tests/filesys/base/lg-create.ck tests/filesys/base/lg-create tests/filesys/base/lg-create.result
 pass tests/filesys/base/lg-create
@@ -621,7 +627,7 @@ pass tests/vm/pt-write-code2
 pass tests/vm/pt-grow-stk-sc
 pass tests/vm/page-linear
 pass tests/vm/page-parallel
-pass tests/vm/page-merge-seq
+FAIL tests/vm/page-merge-seq
 FAIL tests/vm/page-merge-par
 FAIL tests/vm/page-merge-stk
 FAIL tests/vm/page-merge-mm
@@ -654,9 +660,9 @@ pass tests/vm/mmap-kernel
 pass tests/vm/lazy-file
 pass tests/vm/lazy-anon
 FAIL tests/vm/swap-file
-FAIL tests/vm/swap-anon
+pass tests/vm/swap-anon
 FAIL tests/vm/swap-iter
-pass tests/vm/swap-fork
+FAIL tests/vm/swap-fork
 pass tests/filesys/base/lg-create
 pass tests/filesys/base/lg-full
 pass tests/filesys/base/lg-random
@@ -689,7 +695,7 @@ pass tests/threads/priority-sema
 pass tests/threads/priority-condvar
 pass tests/threads/priority-donate-chain
 FAIL tests/vm/cow/cow-simple
-7 of 141 tests failed.
+8 of 141 tests failed.
 ../../tests/Make.tests:28: recipe for target 'check' failed
 make[1]: *** [check] Error 1
 make[1]: Leaving directory '/workspaces/JUNGLE-Pintos-VM/pintos-kaist/vm/build'
