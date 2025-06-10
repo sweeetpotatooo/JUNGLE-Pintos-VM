@@ -65,13 +65,13 @@ file_backed_swap_out (struct page *page)
     struct file_page *file_page = &page->file;
     struct thread    *curr      = thread_current ();
 
-    /* 1. 페이지가 수정(Dirty)되었는지 확인
+    /* 페이지가 수정(Dirty)되었는지 확인
      *    − 사용자 영역에서 한 번이라도 쓰기(Write)가 발생하면
      *      PML4 Dirty 비트가 1이 됨. */
     bool is_dirty = pml4_is_dirty (curr->pml4, page->va) ||
                     pml4_is_dirty (curr->pml4, page->frame->kva);
 
-    /* 2. Dirty 페이지라면 파일에 Write-back */
+    /* Dirty 페이지라면 파일에 Write-back */
     if (is_dirty)
     {
         off_t offset = file_page->file_ofs;
@@ -85,7 +85,7 @@ file_backed_swap_out (struct page *page)
         pml4_set_dirty (curr->pml4, page->frame->kva, false);
     }
 
-    /* 3. 물리 프레임 회수 및 매핑 해제
+    /* 물리 프레임 회수 및 매핑 해제
      *    − Eviction 목적이므로 반드시 메모리를 돌려준다. */
     pml4_clear_page (curr->pml4, page->va);  /* VA→PA 매핑 제거          */
     page->frame->page = NULL;                /* 역참조 해제              */
