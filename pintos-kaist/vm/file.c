@@ -67,7 +67,7 @@ file_backed_swap_out (struct page *page)
 
     /* 1. 페이지가 수정(Dirty)되었는지 확인
      *    − 사용자 영역에서 한 번이라도 쓰기(Write)가 발생하면
-     *      PML4 Dirty 비트가 1이 됩니다. */
+     *      PML4 Dirty 비트가 1이 됨. */
     bool is_dirty = pml4_is_dirty (curr->pml4, page->va) ||
                     pml4_is_dirty (curr->pml4, page->frame->kva);
 
@@ -88,8 +88,8 @@ file_backed_swap_out (struct page *page)
     /* 3. 물리 프레임 회수 및 매핑 해제
      *    − Eviction 목적이므로 반드시 메모리를 돌려준다. */
     pml4_clear_page (curr->pml4, page->va);  /* VA→PA 매핑 제거          */
-    page->frame->page = NULL;                /* 역참조 해제               */
-    free (page->frame);                /* 물리 프레임 반환          */
+    page->frame->page = NULL;                /* 역참조 해제              */
+    free (page->frame);                			 /* 물리 프레임 반환          */
     page->frame = NULL;                      /* “메모리에 없음” 표시      */
 
     return true;

@@ -51,6 +51,7 @@ bool anon_initializer(struct page *page, enum vm_type type, void *kva)
     anon_page->swap_index = -1;
     // TODO: anon_page 속성 추가될 경우 여기서 초기화.
     dprintfb("[anon_initializer] done. returning true\n");
+    page->is_loaded       = false;
     return true; 
 }
 
@@ -65,9 +66,10 @@ anon_swap_in (struct page *page, void *kva)
     int swap_idx = anon_page->swap_index;
 
     /* 이미 메모리에 있는 페이지 */
-    if (swap_idx == -1)
-        return false;
-
+    if (swap_idx == -1) {
+        memset (kva, 0, PGSIZE);
+        return true;
+    }
     /* swap_disk의 ‘swap_idx’ 번째 슬롯 → 8개섹터에 저장 */
     for (int i = 0; i < 8; i++)
     {
@@ -80,7 +82,7 @@ anon_swap_in (struct page *page, void *kva)
 
     /* 더 이상 스왑과 연관되지 않았음을 명시 */
     anon_page->swap_index = -1;
-
+    page->is_loaded = true;
     return true;
 }
 
@@ -115,6 +117,7 @@ anon_swap_out (struct page *page)
 
     /* anon_page에 스왑 슬롯 번호 기록 */
     anon_page->swap_index = (int) slot;
+    page->is_loaded = false;
 
     /* 페이지와 프레임 연결 해제 & 페이지 매핑 제거 */
     pml4_clear_page (thread_current ()->pml4, page->va); /* VA→PA 매핑 삭제 */

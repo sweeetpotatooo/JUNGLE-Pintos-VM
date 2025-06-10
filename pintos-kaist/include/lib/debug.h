@@ -101,3 +101,11 @@ void debug_backtrace (void);
 #define dprintfg(...) ((void)0)
 #endif
 ////////////////////////
+//#define DEBUG_PRINTFH
+
+#ifdef DEBUG_PRINTFH
+#define dprintfh(...) printf(__VA_ARGS__)
+#else
+#define dprintfh(...) ((void)0)
+#endif
+////////////////////////

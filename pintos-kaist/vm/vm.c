@@ -214,7 +214,9 @@ vm_get_victim(void)
 static struct frame *
 vm_evict_frame(void)
 {
+	dprintfh("pivot1\n");
 	struct frame *victim  = vm_get_victim();
+	dprintfh("pivot2\n");
 	struct page  *page   = victim->page;
   ASSERT (page != NULL);
  if (!swap_out (page))            /* anon_swap_out 등 호출 */
@@ -222,12 +224,12 @@ vm_evict_frame(void)
 
     /* 프로세스의 pml4 매핑 해제 */
     pml4_clear_page (thread_current ()->pml4, page->va);
-
+		dprintfh("pivot3\n");
     /* 양방향 링크 끊기 ─ 재사용 준비 */
     page->frame  = NULL;
     victim->page = NULL;
 
-
+		dprintfh("pivot4\n");
     return victim;  
 
 }
@@ -246,19 +248,28 @@ static struct frame *
 vm_get_frame(void)
 {
 	struct frame *frame = malloc(sizeof(struct frame));
+	dprintfh("pivot5\n");
 
-	if (frame == NULL)
-	{
-		PANIC("TODO");
-	}
+
+    if (frame == NULL) {                       
+        frame = vm_evict_frame ();  
+				dprintfh("pivot6\n");           
+        if (frame == NULL)
+            PANIC ("frame alloc & eviction both failed");
+        list_push_back (&frame_list, &frame->frame_elem);
+				dprintfh("pivot7\n");
+        return frame;                          
+    }
 
 	// NOTE: PAL_USER인 이유는 주석에 user space pages를 본 함수로 할당받아야 한다고 명시되어 있어서 이렇게 함. 악성 프로그램이 고의로 커널풀 메모리 고갈시키는 거 막기 위한 분리.
 	frame->page = NULL;
 	ASSERT(frame->page == NULL);
 
 	frame->kva = palloc_get_page(PAL_USER);
+	dprintfh("pivot8\n");
         if (frame->kva == NULL) {
                 frame->kva = palloc_get_page(0);
+
         }
         if (frame->kva == NULL) {
                 free(frame);
@@ -266,6 +277,7 @@ vm_get_frame(void)
         }
 	ASSERT(frame->kva != NULL);
 	list_push_back (&frame_list, &frame->frame_elem);
+	dprintfh("pivot9\n");
 	return frame;
 }
 
