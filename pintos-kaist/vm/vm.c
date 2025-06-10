@@ -498,8 +498,7 @@ spt_destroy_page_in_copy_failure(struct hash_elem *e, void *aux UNUSED)
 	vm_dealloc_page(p);
 }
 
-bool supplemental_page_table_copy(struct supplemental_page_table *dst,
-								  struct supplemental_page_table *src)
+bool supplemental_page_table_copy(struct supplemental_page_table *dst, struct supplemental_page_table *src)
 {
 	struct hash_iterator i;
 	hash_first(&i, &src->hash);

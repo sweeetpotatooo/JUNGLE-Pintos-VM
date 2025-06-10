@@ -6,6 +6,7 @@
 #include "threads/vaddr.h"
 #include "threads/mmu.h"
 #include <string.h>
+#include "userprog/syscall.h"
 
 static bool file_backed_swap_in(struct page *page, void *kva);
 static bool file_backed_swap_out(struct page *page);
@@ -46,55 +47,56 @@ bool file_backed_initializer(struct page *page, enum vm_type type, void *kva)
 
 /* Swap in the page by read contents from the file. */
 static bool
-file_backed_swap_in(struct page *page, void *kva)
+file_backed_swap_in (struct page *page, void *kva)
 {
-        struct file_page *file_page = &page->file;
-        if (file_read_at(file_page->file, kva, file_page->size, file_page->file_ofs) != (int)file_page->size)
-                return false;
-        return true;
-}
+    struct file_page *fp = &page->file;
 
-/* Swap out the page by writeback contents to the file. */
-/* Swap out the page by write-back contents to the file. */
-static bool
-file_backed_swap_out (struct page *page)
-{
-    if (page == NULL || page->frame == NULL)
+    /* 페이지 전체를 0으로 채움  */
+    memset (kva, 0, PGSIZE);
+
+    /* 파일에서 필요한 바이트만 읽어 온다. */
+    off_t read_bytes = file_read_at (fp->file, kva, fp->size, fp->file_ofs);
+    if (read_bytes != (int) fp->size)
         return false;
-
-    struct file_page *file_page = &page->file;
-    struct thread    *curr      = thread_current ();
-
-    /* 페이지가 수정(Dirty)되었는지 확인
-     *    − 사용자 영역에서 한 번이라도 쓰기(Write)가 발생하면
-     *      PML4 Dirty 비트가 1이 됨. */
-    bool is_dirty = pml4_is_dirty (curr->pml4, page->va) ||
-                    pml4_is_dirty (curr->pml4, page->frame->kva);
-
-    /* Dirty 페이지라면 파일에 Write-back */
-    if (is_dirty)
-    {
-        off_t offset = file_page->file_ofs;
-        size_t bytes = file_page->size;
-
-        if ((int) bytes != file_write_at (file_page->file,page->frame->kva,bytes,offset))
-            return false;                    /* write 실패 → swap-out 실패 */
-
-        /* Dirty 비트를 0으로 초기화해 “정상 동기화” 상태 표시 */
-        pml4_set_dirty (curr->pml4, page->va, false);
-        pml4_set_dirty (curr->pml4, page->frame->kva, false);
-    }
-
-    /* 물리 프레임 회수 및 매핑 해제
-     *    − Eviction 목적이므로 반드시 메모리를 돌려준다. */
-    pml4_clear_page (curr->pml4, page->va);  /* VA→PA 매핑 제거          */
-    page->frame->page = NULL;                /* 역참조 해제              */
-    free (page->frame);                			 /* 물리 프레임 반환          */
-    page->frame = NULL;                      /* “메모리에 없음” 표시      */
 
     return true;
 }
 
+/* Swap out the page by write-back contents to the file. */
+static bool
+file_backed_swap_out (struct page *page)
+{
+    /* 예외 처리 */
+    if (page == NULL || page->frame == NULL)
+        return false;
+
+    struct file_page *fp   = &page->file;
+    struct thread    *curr = thread_current ();
+
+    /* Dirty 여부 확인 */
+    bool dirty = pml4_is_dirty (curr->pml4, page->va) || pml4_is_dirty (curr->pml4, page->frame->kva);
+
+    /* Dirty 파일에 write-back */
+    if (dirty)
+    {
+        if (file_write_at (fp->file,page->frame->kva,fp->size,fp->file_ofs) != (int) fp->size){
+            return false;          /* write 실패 → swap-out 실패 */
+				}
+
+        /* Dirty 비트 초기화 */
+        pml4_set_dirty (curr->pml4, page->va, false);
+        pml4_set_dirty (curr->pml4, page->frame->kva, false);
+    }
+
+    /* 매핑만 해제 – 프레임은 재사용 */
+    pml4_clear_page (curr->pml4, page->va);  /* VA - PA 매핑 제거 */
+
+    struct frame *f = page->frame;
+    f->page  = NULL;           
+    page->frame = NULL;        
+
+    return true;
+}
 
 /* Destory the file backed page. PAGE will be freed by the caller. */
 static void
@@ -119,7 +121,6 @@ file_backed_destroy(struct page *page)
 		dprintfg("[file_backed_destroy] writing back. file: %p, size: %d, ofs: %d\n", file_page->file, file_page->size, file_page->file_ofs);
 		// write back
 		// file_write_at (struct file *file, const void *buffer, off_t size, off_t file_ofs) {
-		
 		off_t write_bytes = file_write_at(file_page->file, page->va, file_page->size, file_page->file_ofs); // Writes SIZE bytes만큼 쓴다.
 		dprintfg("[file_backed_destroy] writeback txt: %s\n", page->va);
 		dprintfg("[file_backed_destroy] actual writeback bytes: %d\n", write_bytes); // 파일에 잘 써지기까지 한다. reopen 된 별도의 파일 구조체에 쓴게 문제인가?

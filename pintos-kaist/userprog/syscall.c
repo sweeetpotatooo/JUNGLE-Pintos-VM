@@ -19,6 +19,7 @@
 #include "list.h"
 #define MAP_FAILED ((void *) NULL)
 
+
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
 bool create(const char *file, unsigned initial_size);
@@ -304,10 +305,8 @@ int read(int fd, void *buffer, unsigned size){
       
     // 4. 정상적인 파일이면 read
     off_t ret;
-    lock_acquire(&filesys_lock);
     ret = file_read(file, buffer, size);
 		dprintfe("[read] routine start. 15\n");
-    lock_release(&filesys_lock);
     return ret;
 }
 
@@ -372,8 +371,6 @@ void syscall_handler (struct intr_frame *f UNUSED) {
 	struct thread *t = thread_current();
   t->rsp = f->rsp; 
 	int sys_call_number = (int) f->R.rax; // 시스템 콜 번호 받아옴
-	struct thread *t = thread_current();
-  t->rsp = f->rsp;
 	/*
 	 x86-64 규약은 함수가 리턴하는 값을 "rax 레지스터"에 담음. 다른 인자들은 rdi, rsi 등 다른 레지스터로 전달.
 	 시스템 콜들 중 값 반환이 필요한 것은, struct intr_frame의 rax 멤버 수정을 통해 구현
