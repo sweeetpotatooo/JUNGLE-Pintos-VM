@@ -364,7 +364,9 @@ int process_exec(void *f_name)
 	/*-- Project 2. User Programs 과제 --*/
 
 	/* And then load the binary */
+	
 	success = load(file_name, &_if);
+
 	/* If load failed, quit. */
 	if (!success)
 	{
@@ -571,7 +573,9 @@ static bool load(const char *file_name, struct intr_frame *if_)
 	dprintf("[LOAD] pml4 activated\n");
 
 	/* Open executable file. */
+	lock_acquire(&filesys_lock);
 	file = filesys_open(file_name);
+	lock_release(&filesys_lock);
 	if (file == NULL)
 	{
 		printf("load: %s: open failed\n", file_name);
@@ -580,12 +584,14 @@ static bool load(const char *file_name, struct intr_frame *if_)
 	dprintf("[LOAD] exec file opened\n");
 
 	/* Read and verify executable header. */
+	lock_acquire(&filesys_lock);
 	if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr || memcmp(ehdr.e_ident, "\177ELF\2\1\1", 7) || ehdr.e_type != 2 || ehdr.e_machine != 0x3E // amd64
 		|| ehdr.e_version != 1 || ehdr.e_phentsize != sizeof(struct Phdr) || ehdr.e_phnum > 1024)
 	{
 		printf("load: %s: error loading executable\n", file_name);
 		goto done;
 	}
+	lock_release(&filesys_lock);
 	dprintf("[LOAD] verified executable header\n");
 
 	/* Read program headers. */
@@ -597,9 +603,10 @@ static bool load(const char *file_name, struct intr_frame *if_)
 		if (file_ofs < 0 || file_ofs > file_length(file))
 			goto done;
 		file_seek(file, file_ofs);
-
+		lock_acquire(&filesys_lock);
 		if (file_read(file, &phdr, sizeof phdr) != sizeof phdr)
 			goto done;
+		lock_release(&filesys_lock);
 		file_ofs += sizeof phdr;
 		switch (phdr.p_type)
 		{
@@ -866,7 +873,6 @@ lazy_load_segment(struct page *page, void *aux)
 			return false;
 		}
 	}
-
 	dprintfb("[lazy_load_segment] file read complete\n");
 	memset(page->frame->kva + lazy_aux->read_bytes, 0, lazy_aux->zero_bytes); // zero bytes 복사.
 	dprintfb("[lazy_load_segment] zero bytes copied. lazy load success\n");

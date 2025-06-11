@@ -12,7 +12,7 @@
 #include "userprog/process.h"
 #include <string.h>
 #include "filesys/file.h"
-
+#include "userprog/syscall.h"
 struct lazy_load_args
 {
 	struct file *file;
@@ -20,7 +20,8 @@ struct lazy_load_args
 	size_t page_read_bytes;
 	size_t zero_bytes;
 };
-
+static struct list frame_table;
+static struct lock frame_lock;
 /* 가상 메모리 서브시스템을 초기화합니다.
  * 각 서브시스템의 초기화 코드를 호출합니다. */
 void vm_init(void)
@@ -28,6 +29,8 @@ void vm_init(void)
 	vm_anon_init();
 	vm_file_init();
 	list_init(&frame_list);
+	lock_init(&frame_lock);
+	
 #ifdef EFILESYS /* Project 4용 */
 	pagecache_init();
 #endif
@@ -199,12 +202,14 @@ vm_get_victim(void)
 {
 	struct frame *victim;
 	/* TODO: 교체 정책을 여기서 구현해서 희생자 페이지 찾기 */
+	lock_acquire(&frame_lock);
+	// ASSERT(list_empty(&frame_list) == false);
+	if (!(list_empty(&frame_list))) {
+		victim = list_entry(list_pop_front(&frame_list), struct frame, frame_elem);
+		ASSERT(victim != NULL);
+	}
 
-	ASSERT(list_empty(&frame_list) == false);
-
-	victim = list_entry(list_pop_front(&frame_list), struct frame, frame_elem);
-	ASSERT(victim != NULL);
-
+	lock_release(&frame_lock);
 	return victim;
 }
 
@@ -254,7 +259,9 @@ vm_get_frame(void)
 		dprintfh("pivot6\n");
 		if (frame == NULL)
 			PANIC("frame alloc & eviction both failed");
+		lock_acquire(&frame_lock);
 		list_push_back(&frame_list, &frame->frame_elem);
+		lock_release(&frame_lock);
 		dprintfh("pivot7\n");
 		return frame;
 	}

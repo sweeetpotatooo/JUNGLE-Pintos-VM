@@ -17,6 +17,7 @@
 #include "threads/mmu.h"
 #include <round.h>
 #include "list.h"
+
 #define MAP_FAILED ((void *) NULL)
 
 
@@ -88,7 +89,9 @@ void seek(int fd, unsigned position) {
 	struct file *file = process_get_file_by_fd(fd);
 	if (file == NULL)
 		return;
+	lock_acquire(&filesys_lock);
 	file_seek(file, position);
+	lock_release(&filesys_lock);
 }
 
 /**
@@ -173,7 +176,10 @@ int exec(char *file_name) {
  */
 bool create(const char *file, unsigned initial_size) {		
 	check_address(file);
-	return filesys_create(file, initial_size);
+	lock_acquire(&filesys_lock);
+	bool result = filesys_create(file, initial_size);
+	lock_release(&filesys_lock);
+	return result;
 }
 
 /**
@@ -184,7 +190,10 @@ bool create(const char *file, unsigned initial_size) {
  */
 bool remove(const char *file) {	
 	check_address(file);
-	return filesys_remove(file);
+	lock_acquire(&filesys_lock);
+	bool result = filesys_remove(file);
+	lock_release(&filesys_lock);
+	return result;
 }
 
 /**
@@ -194,24 +203,24 @@ bool remove(const char *file) {
  * @param file: 오픈할 파일.
  */
 int open(const char *filename) {
-	dprintfg("[open] routine start. filename: %p\n", filename);
 	check_address(filename); // 이상한 포인터면 즉시 종료
-	dprintfg("[open] validation complete\n");
+	lock_acquire(&filesys_lock);
+
 	struct file *file_obj = filesys_open(filename);
+	lock_release(&filesys_lock);
 	
 	if (file_obj == NULL) {
 		return -1;
 	}
 
 	int fd = process_add_file(file_obj);
-	dprintfg("[open] process add file done\n");
 
 	if (fd == -1) { // fd table 꽉찬 경우 그냥 닫아버림
-		dprintfg("[open] failed\n");
+		lock_acquire(&filesys_lock);
 		file_close(file_obj);
+		lock_release(&filesys_lock);
     	file_obj = NULL;
 	}
-	dprintfg("[open] success. returnin fd: %d\n", fd);
 	
 	return fd;
 }
@@ -242,7 +251,10 @@ int filesize(int fd) {
 	if (open_file == NULL) {
 		return -1;
 	}
-	return file_length(open_file);
+	lock_acquire(&filesys_lock);
+	int result = file_length(open_file);
+	lock_release(&filesys_lock);
+	return result;
 }
 
 /**
@@ -255,58 +267,46 @@ int filesize(int fd) {
  */
 int read(int fd, void *buffer, unsigned size){
 	// 1. 주소 범위 검증
-	dprintfe("[read] routine start. 1\n");
-		check_address(buffer);
-		dprintfe("[read] routine start. 2\n");
-    check_address(buffer + size-1); 
-
-		dprintfe("[read] routine start.3 \n");
-    if (size == 0){
-				dprintfe("[read] routine start.5 \n");
+	dprintfg("[read] routine start. buffer: %p\n", buffer);
+	check_address(buffer);
+    // check_address(buffer + size-1); 
+	dprintfg("[read] pivot -1\n");
+	// if(spt_find_page(&thread_current()->spt, buffer) != NULL && !(spt_find_page(&thread_current()->spt, buffer)->writable)) // DEBUG: 중복
+	// {
+	// 	exit(-1);
+	// }
+	dprintfg("[read] pivot 0\n");
+    if (size == 0)
         return 0;
-		}
-    if (buffer == NULL || !is_user_vaddr(buffer)){
-        dprintfe("[read] routine start. 6\n");
-				exit(-1);
-		}
+    if (buffer == NULL || !is_user_vaddr(buffer))
+        exit(-1);
 
-
+	dprintfg("[read] pivot 1\n");
     // 2. stdin (fd == 0)일 경우
     if (fd == STDIN_FILENO) {
-				dprintfe("[read] routine start. 7\n");
         unsigned i;
         uint8_t *buf = buffer;
-        for (i = 0; i < size; i++) {
+        for (i = 0; i < size; i++) 
             buf[i] = input_getc();
-						dprintfe("[read] routine start.8 \n");
-				}
         return i;
     }
+	dprintfg("[read] pivot 2\n");
 
     // 3. fd 범위 검사
-    if (fd < 2 || fd >= FDCOUNT_LIMIT){
-				dprintfe("[read] routine start. 9\n");
+    if (fd < 2 || fd >= FDCOUNT_LIMIT)
         return -1;
-		}
-		
-    struct file *file = process_get_file_by_fd(fd);
-		dprintfe("[read] routine start. 10\n");
-		check_address_writable(buffer);
-		dprintfe("[read] routine start. 11\n");
-    if (file == NULL){
-				dprintfe("[read] routine start. 12\n");
-        return -1; // 해당 파일이 NULL이면 즉시 리턴.
-		}
 
-		struct thread *cur = thread_current();
-		dprintfe("[read] routine start. 13\n");
-      struct page *page = spt_find_page(&cur->spt, buffer);
-			dprintfe("[read] routine start. 14\n");
-      
+    struct file *file = process_get_file_by_fd(fd);
+	check_address_writable(buffer);
+    if (file == NULL)
+        return -1; // 해당 파일이 NULL이면 즉시 리턴.
+
+	dprintfg("[read] pivot 3\n");
     // 4. 정상적인 파일이면 read
     off_t ret;
+    lock_acquire(&filesys_lock);
     ret = file_read(file, buffer, size);
-		dprintfe("[read] routine start. 15\n");
+    lock_release(&filesys_lock);
     return ret;
 }
 
