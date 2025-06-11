@@ -136,30 +136,10 @@ anon_swap_out (struct page *page)
  page·frame 간 매핑도 끊어 줌
  */
 static void
-anon_destroy (struct page *page)
+anon_destroy(struct page *page)
 {
-    if (page == NULL)
-        return;
-
     struct anon_page *anon_page = &page->anon;
-
-    /* 스왑 슬롯 회수 */
-    if (anon_page->swap_index != -1)
-    {
-        bitmap_reset (swap_table, anon_page->swap_index); /* 슬롯을 ‘비어 있음’으로 */
-        anon_page->swap_index = -1;
-    }
-
-    /* 프레임 반납 */
-    if (page->frame != NULL)
-    {
-        /* 해당 가상 주소의 매핑 제거(PML4) */
-        pml4_clear_page (thread_current ()->pml4, page->va);
-        /* 역참조 해제 */
-        page->frame->page = NULL;
-        /* 물리 프레임 반환 */
-        free (page->frame);
-        page->frame = NULL;
-    }
+    return;
+    // TODO: 여기도 딱히 몰라.
 }
 
